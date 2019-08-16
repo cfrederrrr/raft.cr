@@ -1,0 +1,9 @@
+name: raft
+version: 0.1.0
+
+authors:
+  - Carl Frederick <galvertez@gmail.com>
+
+crystal: 0.29.0
+
+license: MIT
