@@ -29,6 +29,12 @@ It uses
 
 ### Packets
 
+#### Types
++ `0xAE00` Append Entries RPC
++ `0xAEF0` Append Entries Result
++ `0xF900` Request Vote
++ `0xF9F0` Request Vote Result
+
 #### Requests
 
 ##### RequestVote
@@ -52,7 +58,7 @@ Previous Log Index | 32 Bits
 Entries | 2+ Bits
 
 #### Results
-###### RequestVote
+##### RequestVote
 Name|Size
 -|-
 Type Indicator|32 Bits
