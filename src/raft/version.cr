@@ -1,4 +1,9 @@
 module Raft::Version
+  extend Comparable(Int32)
+  def <=>(other : Int32)
+    self.to_i <=> other
+  end
+
   MAJOR = 0_u8
   MINOR = 1_u8
   PATCH = 0_u8

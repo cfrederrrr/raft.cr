@@ -1,14 +1,26 @@
-abstract class Raft::State(S)
-  # # persistent state
-  # getter current_term : Int32
-  # getter voted_for : Int32
-  # getter log : Array(S)
-  #
-  #
-  # # volatile state (all)
-  # getter commit_idx : Int32
-  #
-  # # volatile state (leader)
-  # getter next_index : Array(Int32)
-  # getter match_index : Array(Int32)
+module Raft::State
+  class Persistent
+    @current_term : UInt64
+    @voted_for : UInt64?
+    @log : Raft::Log
+
+    def initialize(@current_term, @voted_for = nil, @log = Raft::Log(T)) forall T
+    end
+
+    def initialize(init_state : T) forall T
+      @current_term = 0_u64
+      @voted_for = nil
+      @log = [] of T
+    end
+  end
+
+  class Volatile
+  end
+
+  class Leader
+  end
+end
+
+class Raft::VolatileState < Raft::State
+  @commit_idx =
 end

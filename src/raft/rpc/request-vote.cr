@@ -1,19 +1,47 @@
 struct Raft::RPC::RequestVote < Raft::RPC::NetComm
+  IDENTIFIER = 0xF900_u16
+
+  # Packet size dynamically
+  PKTSIZE = (
+    sizeof(IDENTIFIER.class) + # class id
+    sizeof(UInt32) +           # term
+    sizeof(UInt32) +           # candidate_id
+    sizeof(UInt32) +           # last_log_idx
+    sizeof(UInt32) +           # last_log_term
+    sizeof(EOT.class)          # end of transmission control char
+  )
+
+  # The term associated with this RequestVote RPC
   getter term : UInt32
+
+  # The ID of the candidate campaigning to become leader of the cluster
   getter candidate_id : UInt32
+
+  # Index of the candidate's last log entry.
+  # If the receiver's `@last_log_idx` is greater than the one associated
+  # with this RequestVote RPC, the vote will not be granted.
   getter last_log_idx : UInt32
+
+  # The term associated with the candidate's last log entry.
+  # If the receiver's `@last_log_term` is greater tahn the one associated
+  # with this RequestVote RPC, the vote will be denied.
   getter last_log_term : UInt32
 
   def self.new(io : IO)
-    from_io(io)
+    from_io(io, Format)
   end
 
-  def self.from_io(io : IO, fm : IO::ByteFormat = FM)
+  def self.from_io(io : IO, fm : IO::ByteFormat = Format)
     term = io.read_bytes(UInt32, fm)
     candidate_id = io.read_bytes(UInt32, fm)
     last_log_idx = io.read_bytes(UInt32, fm)
     last_log_term = io.read_bytes(UInt32, fm)
-    new term, candidate_id, last_log_idx, last_log_term
+    endoftext = io.read_bytes(UInt8, fm)
+    if endoftext == EOT
+      new term, candidate_id, last_log_idx, last_log_term
+    else
+      raise "expected EOT char, not #{endoftext}"
+    end
   end
 
   def initialize(@term, @candidate_id, @last_log_idx, @last_log_term)
@@ -21,25 +49,11 @@ struct Raft::RPC::RequestVote < Raft::RPC::NetComm
 
   def to_io
     io = IO::Memory.new(160)
-    to_io(io, FM)
+    to_io(io, Format)
   end
 
-  # RequestVote packet structure
-  #
-  # ```
-  #  <--         32 bits          -->
-  # +--------------------------------+
-  # | Type indication (0x0000ff00)   |
-  # +--------------------------------+
-  # | Candidate ID                   |
-  # +--------------------------------+
-  # |                                |
-  # +--------------------------------+
-  # |                                |
-  # +--------------------------------+
-  # ```
-  def to_io(io : IO, fm : IO::ByteFormat = FM)
-    0x0000ff00_u32.to_io(io, fm)
+  def to_io(io : IO, fm : IO::ByteFormat = Format)
+    IDENTIFIER.to_io(io, fm)
     Raft::Version.to_io(io, fm)
     @term.to_io(io, fm)
     @candidate_id.to_io(io, fm)
@@ -50,9 +64,19 @@ struct Raft::RPC::RequestVote < Raft::RPC::NetComm
 end
 
 struct Raft::RPC::RequestVote::Result < Raft::RPC::NetComm
-  IDENTITY = 0x0000ff00_u32
+  IDENTIFIER = 0xF9F0_u16
+  PKTSIZE = (
+    sizeof(IDENTIFIER.class) + # class identifier
+    sizeof(Int32) +            # term
+    sizeof(ACK.class) +        # vote granted (ACK and NAK are same size)
+    sizeof(EOT.class)          # end of transmittion control char
+  )
+
   getter term : Int32
   getter vote_granted : Bool
+
+  def initialize(@term, @vote_granted)
+  end
 
   def self.new(io : IO)
     from_io(io)
@@ -60,28 +84,24 @@ struct Raft::RPC::RequestVote::Result < Raft::RPC::NetComm
 
   def self.from_io(io : IO)
     term = io.read_bytes(UInt32, fm)
-    vote_granted = io.read_bytes(UInt32, FM)
-    if vote_granted == 0xffff000_u32
-      return new(term, true)
-    elsif vote_granted == 0x0000ffff_u32
-      return new(term, false)
-    else
-      raise "cannot determine success/failure of vote"
+    vote_granted = io.read_bytes(UInt32, Format)
+    case
+    when vote_granted == ACK then return new(term, true)
+    when vote_granted == NAK then return new(term, false)
+    else raise "cannot determine success/failure of vote"
     end
   end
 
-  def initialize(@term, @vote_granted)
-  end
-
   def to_io
-    io = IO::Memory.new(32*3)
-    to_io(io, FM)
+    io = IO::Memory.new(PKTSIZE)
+    to_io(io, Format)
   end
 
-  def to_io(io : IO, fm : IO::ByteFormat = FM)
-    IDENTITY.to_io(io, fm)
+  def to_io(io : IO, fm : IO::ByteFormat = Format)
+    IDENTIFIER.to_io(io, fm)
     @term.to_io(io, fm)
-    (@vote_granted ? 0xffff0000_u32 : 0x0000ffff_u32).to_io(io, fm)
+    @vote_granted ? ACK.to_io(io, fm) : NAK.to_io(io, fm)
+    EOT.to_io(io, fm)
     return io
   end
 end

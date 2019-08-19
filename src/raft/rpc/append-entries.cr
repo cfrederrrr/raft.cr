@@ -2,7 +2,7 @@ struct Raft::RPC::AppendEnties(E) < Raft::RPC::NetComm
   # Size of the header before the data section
   HEADER_SIZE = 32 * 6
 
-  IDENTITY = 0x00ff0000
+  IDENTIFIER = 0xAE00_u16
   getter term : UInt32
   getter leader_id : UInt32
   getter leader_commit : UInt32
@@ -10,11 +10,11 @@ struct Raft::RPC::AppendEnties(E) < Raft::RPC::NetComm
   getter prev_log_term : UInt32
   getter entries : Array(E)
 
-  def self.new(io : IO, fm : IO::ByteFormat = FM)
+  def self.new(io : IO, fm : IO::ByteFormat = Format)
     from_io(io, fm)
   end
 
-  def self.from_io(io : IO, fm : IO::ByteFormat = FM)
+  def self.from_io(io : IO, fm : IO::ByteFormat = Format)
     term = io.read_bytes(UInt32, bf)
     leader_id = io.read_bytes(UInt32, bf)
     leader_commit = io.read_bytes(UInt32, bf)
@@ -25,7 +25,7 @@ struct Raft::RPC::AppendEnties(E) < Raft::RPC::NetComm
     new term, leader_id, prev_log_idx, prev_log_term, leader_commit, entries
   end
 
-  def self.read_entry(io : IO, fm : IO::ByteFormat = FM)
+  def self.read_entry(io : IO, fm : IO::ByteFormat = Format)
   end
 
   def initialize(
@@ -40,7 +40,7 @@ struct Raft::RPC::AppendEnties(E) < Raft::RPC::NetComm
 
   def to_io
     io = IO::Memory.new
-    to_io(io, FM)
+    to_io(io, Format)
   end
 
   # AppendEntries packet structure
@@ -66,9 +66,9 @@ struct Raft::RPC::AppendEnties(E) < Raft::RPC::NetComm
   # | Entries ...
   # ```
   #
-  def to_io(io : IO, fm : IO::ByteFormat = FM)
-    UInt32.new(0xffff0000).to_io(io, fm)
-    Raft::Version.to_io(io, fm)
+  def to_io(io : IO, fm : IO::ByteFormat = Format)
+    ::Raft::Version.to_io(io, fm)
+    IDENTIFIER.to_io(io, fm)
     @term.to_io(io, fm)
     @leader_id.to_io(io, fm)
     @leader_commit.to_io(io, fm)
@@ -83,16 +83,16 @@ struct Raft::RPC::AppendEnties(E) < Raft::RPC::NetComm
 end
 
 struct Raft::RPC::AppendEntries::Result < Raft::RPC::NetComm
-  IDENTITY = 0xff000000_u32
+  IDENTIFIER = 0xAEF0_u16
 
   getter term : UInt32
   getter success : Bool
 
-  def self.new(io : IO, fm : IO::ByteFormat = FM)
+  def self.new(io : IO, fm : IO::ByteFormat = Format)
     from_io(io, fm)
   end
 
-  def self.from_io(io : IO, fm : IO::ByteFormat = FM)
+  def self.from_io(io : IO, fm : IO::ByteFormat = Format)
     term = io.read_bytes(UInt32, fm)
     success_val = io.read_bytes(UInt8, fm)
     success = success_val == ACK ? true : false
@@ -114,6 +114,11 @@ struct Raft::RPC::AppendEntries::Result < Raft::RPC::NetComm
   # | Success                        |
   # +--------------------------------+
   # ```
-  def to_io(io : IO, fm : IO::ByteFormat = FM)
+  def to_io(io : IO, fm : IO::ByteFormat = Format)
+    ::Raft::Version.to_io(io, fm)
+    IDENTIFIER.to_io(io, fm)
+    @term.to_io(io, fm)
+    @success ? ACK.to_io(io, fm) : NAK.to_io(io, fm)
+    EOT.to_io(io, fm)
   end
 end

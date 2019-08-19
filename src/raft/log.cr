@@ -1,8 +1,10 @@
 class Raft::Log
+  @last_commit_idx
   @entries : Array(Raft::Log::Entry)
 
   def self.from_io(io : IO, fm : IO::ByteFormat)
     entries = [] of Raft::Log::Entry
+    new entries
   end
 
   def to_io(io : IO, fm : IO::ByteFormat)
