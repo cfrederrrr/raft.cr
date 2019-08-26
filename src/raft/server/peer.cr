@@ -2,7 +2,7 @@ class Raft::Server::Peer
   getter address : String
   @ssl : OpenSSL::SSL::Context?
   @uri : URI
-  @socket : IO::Buffered? = nil
+  @socket : IO::Buffered|OpenSSL::SSL::Socket::Client?
 
   def initialize(@address : String, @ssl : OpenSSL::SSL::Context? = nil)
     @uri = URI.parse(string)
@@ -10,26 +10,19 @@ class Raft::Server::Peer
   end
 
   def socket
-    skt = @socket
+    return @socket if @socket && !@socket.closed?
     skt = TCPSocket.new(@uri.host, @uri.port)
     if @ssl
-      skt = OpenSSL::SSL::Socket::Client.new(skt, )
-  end
-
-  def read_packet(io : IO)
-    kind = io.read_bytes(Int32, IO::ByteFormat::NetworkEndian)
-    case kind
-    when Raft::RPC::AppendEntries::IDENTIFIER
-      return Raft::RPC::AppendEnties(E).new(io)
-    when Raft::RPC::RequestVote::IDENTIFIER
-      return Raft::RPC::RequestVote.new(io)
-    when Raft::RPC::AppendEntries::Result::IDENTIFIER
-      return Raft::RPC::AppendEntries::Result.new(io)
-    when Raft::RPC::RequestVote::Result::IDENTIFIER
-      return Raft::RPC::RequestVote::Result.new(io)
+      @socket = OpenSSL::SSL::Socket::Client.new(skt, context: @ssl, sync_close: true, hostname: @uri.host)
     else
-      raise "invalid kind"
+      @socket = skt
     end
+    @socket
   end
 
+  def request_vote(request)
+    request.to_io(socket, FM)
+    Fiber.yield
+    Raft::RPC::RequestVote::Result.new(socket, FM)
+  end
 end

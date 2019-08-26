@@ -1,9 +1,7 @@
 module Raft
 end
 
-require "./version"
-require "./rpc"
-require "./log"
-require "./state"
-require "./client"
-require "./server"
+require "./raft/version"
+require "./raft/rpc"
+require "./raft/log"
+require "./raft/server"

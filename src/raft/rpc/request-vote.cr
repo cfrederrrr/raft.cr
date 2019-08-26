@@ -1,15 +1,6 @@
-struct Raft::RPC::RequestVote < Raft::RPC::NetComm
-  IDENTIFIER = 0xF900_u16
-
-  # Packet size dynamically
-  PKTSIZE = (
-    sizeof(IDENTIFIER.class) + # class id
-    sizeof(UInt32) +           # term
-    sizeof(UInt32) +           # candidate_id
-    sizeof(UInt32) +           # last_log_idx
-    sizeof(UInt32) +           # last_log_term
-    sizeof(EOT.class)          # end of transmission control char
-  )
+struct Raft::RPC::RequestVote < Raft::RPC::Packet
+  #:nodoc:
+  TYPEID = 0xF9_i16
 
   # The term associated with this RequestVote RPC
   getter term : UInt32
@@ -27,17 +18,22 @@ struct Raft::RPC::RequestVote < Raft::RPC::NetComm
   # with this RequestVote RPC, the vote will be denied.
   getter last_log_term : UInt32
 
+  #
   def self.new(io : IO)
-    from_io(io, Format)
+    from_io(io, FM)
   end
 
-  def self.from_io(io : IO, fm : IO::ByteFormat = Format)
+  # Reads a `RequestVote` packet directly from an `IO`, starting _after_
+  # the `TYPEID` part of the packet; that is, `TYPEID` is only
+  # present in the packet so that the socket knows what to expect when
+  # reading from the `IO`
+  def self.from_io(io : IO, fm : IO::ByteFM = FM)
     term = io.read_bytes(UInt32, fm)
     candidate_id = io.read_bytes(UInt32, fm)
     last_log_idx = io.read_bytes(UInt32, fm)
     last_log_term = io.read_bytes(UInt32, fm)
     endoftext = io.read_bytes(UInt8, fm)
-    if endoftext == EOT
+    if io.pos == io.buffer_size
       new term, candidate_id, last_log_idx, last_log_term
     else
       raise "expected EOT char, not #{endoftext}"
@@ -48,13 +44,13 @@ struct Raft::RPC::RequestVote < Raft::RPC::NetComm
   end
 
   def to_io
-    io = IO::Memory.new(160)
-    to_io(io, Format)
+    io = IO::Memory.new(PKTSIZE)
+    to_io(io, FM)
   end
 
-  def to_io(io : IO, fm : IO::ByteFormat = Format)
-    IDENTIFIER.to_io(io, fm)
+  def to_io(io : IO, fm : IO::ByteFM = FM)
     Raft::Version.to_io(io, fm)
+    TYPEID.to_io(io, fm)
     @term.to_io(io, fm)
     @candidate_id.to_io(io, fm)
     @last_log_idx.to_io(io, fm)
@@ -63,16 +59,14 @@ struct Raft::RPC::RequestVote < Raft::RPC::NetComm
   end
 end
 
-struct Raft::RPC::RequestVote::Result < Raft::RPC::NetComm
-  IDENTIFIER = 0xF9F0_u16
-  PKTSIZE = (
-    sizeof(IDENTIFIER.class) + # class identifier
-    sizeof(Int32) +            # term
-    sizeof(ACK.class) +        # vote granted (ACK and NAK are same size)
-    sizeof(EOT.class)          # end of transmittion control char
-  )
+struct Raft::RPC::RequestVote::Result < Raft::RPC::Packet
+  #:nodoc:
+  TYPEID = -0xF9_i16
 
+  # The term associated with this RequestVote RPC
   getter term : Int32
+
+  # Indicates whether or not the vote was granted to the candidate
   getter vote_granted : Bool
 
   def initialize(@term, @vote_granted)
@@ -82,26 +76,24 @@ struct Raft::RPC::RequestVote::Result < Raft::RPC::NetComm
     from_io(io)
   end
 
+  # Reads a `RequestVote::Result` directly from an `IO` starting _after_
+  # the `TYPEID`
   def self.from_io(io : IO)
     term = io.read_bytes(UInt32, fm)
-    vote_granted = io.read_bytes(UInt32, Format)
-    case
-    when vote_granted == ACK then return new(term, true)
-    when vote_granted == NAK then return new(term, false)
-    else raise "cannot determine success/failure of vote"
-    end
+    vote_granted = io.read_bytes(UInt32, FM)
+    new term, (vote_granted == ACK)
   end
 
   def to_io
-    io = IO::Memory.new(PKTSIZE)
-    to_io(io, Format)
+    io = IO::Memory.new
+    to_io(io, FM)
   end
 
-  def to_io(io : IO, fm : IO::ByteFormat = Format)
-    IDENTIFIER.to_io(io, fm)
+  def to_io(io : IO, fm : IO::ByteFM = FM)
+    ::Raft::Version.to_io(io, fm)
+    TYPEID.to_io(io, fm)
     @term.to_io(io, fm)
     @vote_granted ? ACK.to_io(io, fm) : NAK.to_io(io, fm)
-    EOT.to_io(io, fm)
     return io
   end
 end

@@ -1,5 +1,5 @@
 module Raft::RPC
-  abstract struct NetComm
+  abstract struct Packet
     # Single byte control characters, written in binary notation
     # to ensure that there are no accidental duplicates
     #
@@ -9,25 +9,47 @@ module Raft::RPC
     # with given the surrounding context (mainly because unicode is not
     # guaranteed to be one or two bytes).
 
-    # [Start of Text](https://codepoints.net/U+0002) - Used in `NetComm` at the end of the
+    # [Start of Text](https://codepoints.net/U+0002) - Used in `Packet` at the end of the
     # header section to indicate the start of the data section
     STX = 0x02_u8
 
-    # [End of Transmission](https://codepoints.net/U+0004) - Used in `NetComm` to signal the end of
+    # [End of Transmission](https://codepoints.net/U+0004) - Used in `Packet` to signal the end of
     # the packet.
     EOT = 0x04_u8
 
-    # [Acknowledge](https://codepoints.net/U+0006) is used in `NetComm` to denote boolean `true`
+    # [Acknowledge](https://codepoints.net/U+0006) is used in `Packet` to denote boolean `true`
     ACK = 0x06_u8
 
-    # [Not Acknowledged](https://codepoints.net/U+0015) - Used in `NetComm` to denote boolean `false`
+    # [Not Acknowledged](https://codepoints.net/U+0015) - Used in `Packet` to denote boolean `false`
     NAK = 0x15_u8
 
-    # [Record Separator](https://codepoints.net/U+001E) - Used in `NetComm` to separate `NetComm::Entry`
+    # [Record Separator](https://codepoints.net/U+001E) - Used in `Packet` to separate `Packet::Entry`
     RS = 0x1E_u8
 
-    alias Format = IO::ByteFormat::NetworkEndian
+    alias FM = IO::ByteFormat::NetworkEndian
     abstract def to_io(io : IO, fm : IO::ByteFormat)
+
+    def self.from_io(io : IO, fm : IO::ByteFormat = FM)
+      major = io.read_bytes(UInt8, fm)
+      minor = io.read_bytes(UInt8, fm)
+      patch = io.read_bytes(UInt8, fm)
+      version = Raft::Version.new(major, minor, patch)
+      raise "[#{io.remote_address}] - unsafe packet version '#{version}'" unless version.safe?
+
+      typeid = io.read_bytes(Int16, fm)
+      case typeid
+      when Raft::RPC::AppendEntries::TYPEID
+           Raft::RPC::AppendEntries.new(io, fm)
+      when Raft::RPC::AppendEntries::Result::TYPEID
+           Raft::RPC::AppendEntries::Result.new(io, fm)
+      when Raft::RPC::RequestVote::TYPEID
+           Raft::RPC::RequestVote.new(io, fm)
+      when Raft::RPC::RequestVote::Result::TYPEID
+           Raft::RPC::RequestVote::Result.new(io, fm)
+      else
+        raise "[#{io.remote_address}] - invalid typeid '#{typeid}'"
+      end
+    end
   end
 end
 

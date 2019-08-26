@@ -1,5 +1,4 @@
 class Raft::Log
-  @last_commit_idx
   @entries : Array(Raft::Log::Entry)
 
   def self.from_io(io : IO, fm : IO::ByteFormat)
@@ -20,5 +19,5 @@ end
 abstract class Raft::Log::Entry
   abstract def to_io(io : IO, fm : IO::ByteFormat) : IO
   abstract def from_io(io : IO, fm : IO::ByteFormat)
-  abstract def class_id : UInt64
+  abstract def typeid : UInt32
 end
