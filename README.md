@@ -40,6 +40,7 @@ It uses
 ##### RequestVote
 Name | Size (160 Bits total)
 -|-
+Version|24 Bits
 Type Indicator | 32 Bits
 Candidate ID | 32 Bits
 Last log index | 32 Bits
@@ -48,6 +49,7 @@ Last log term | 32 Bits
 ##### AppendEntries
 Name|Size (224 Bits total)
 -|-
+Version| 24 Bits
 Type indication | 32 Bits
 Log Type Indicator | 32 Bits
 Term | 32 Bits
@@ -61,6 +63,7 @@ Entries | 2+ Bits
 ##### RequestVote
 Name|Size
 -|-
+Version|24 Bits
 Type Indicator|32 Bits
 Term | 32 Bits
 Vote Granted | 32 Bits
@@ -68,6 +71,7 @@ Vote Granted | 32 Bits
 ##### AppendEnties
 Name|Size
 -|-
+Version|24 Bits
 Type Indicator|32 Bits
 Term|32 Bits
 Success|32 Bits
