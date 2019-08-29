@@ -24,7 +24,8 @@ struct Raft::RPC::AppendEntries < Raft::RPC::Packet
     count = 0
     entries = [] of Raft::Log::Entry
     while count < size
-
+      entries.push Raft::Log::Entry.from_io(io, fm)
+      io.read_bytes(UInt8, io)
     end
 
     new term, leader_id, prev_log_idx, prev_log_term, leader_commit, entries
@@ -54,7 +55,6 @@ struct Raft::RPC::AppendEntries < Raft::RPC::Packet
       entry.to_io(io, fm)
       RS.to_io(io, fm)
     end
-    EOT.to_io(io, fm)
   end
 end
 
@@ -92,10 +92,9 @@ struct Raft::RPC::AppendEntries::Result < Raft::RPC::Packet
   # +--------------------------------+
   # ```
   def to_io(io : IO, fm : IO::ByteFM = FM)
-    ::Raft::Version.to_io(io, fm)
+    Raft::Version.to_io(io, fm)
     TYPEID.to_io(io, fm)
     @term.to_io(io, fm)
     @success ? ACK.to_io(io, fm) : NAK.to_io(io, fm)
-    EOT.to_io(io, fm)
   end
 end

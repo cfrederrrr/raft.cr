@@ -39,13 +39,13 @@ module Raft::RPC
       typeid = io.read_bytes(Int16, fm)
       case typeid
       when Raft::RPC::AppendEntries::TYPEID
-           Raft::RPC::AppendEntries.new(io, fm)
+           Raft::RPC::AppendEntries.from_io(io, fm)
       when Raft::RPC::AppendEntries::Result::TYPEID
-           Raft::RPC::AppendEntries::Result.new(io, fm)
+           Raft::RPC::AppendEntries::Result.from_io(io, fm)
       when Raft::RPC::RequestVote::TYPEID
-           Raft::RPC::RequestVote.new(io, fm)
+           Raft::RPC::RequestVote.from_io(io, fm)
       when Raft::RPC::RequestVote::Result::TYPEID
-           Raft::RPC::RequestVote::Result.new(io, fm)
+           Raft::RPC::RequestVote::Result.from_io(io, fm)
       else
         raise "[#{io.remote_address}] - invalid typeid '#{typeid}'"
       end

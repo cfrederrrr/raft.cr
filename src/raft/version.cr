@@ -66,7 +66,7 @@ struct Raft::Version
   # Converts the current version to an unsigned integer
   # to simplify comparison
   def self.to_u
-    version = 0_u + MAJOR
+    version = 0_u32 + MAJOR
     version <<= 8
     version += MINOR
     version <<= 8
@@ -76,7 +76,7 @@ struct Raft::Version
   # Converts the version of this instance to an unsigned integer
   # to simplify comparison
   def to_u
-    version = 0_u + @major
+    version = 0_u32 + @major
     version <<= 8
     version += @minor
     version <<= 8
