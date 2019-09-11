@@ -15,9 +15,19 @@ class Raft::Log
     while io.peek.any?
       typeid = io.read_bytes(Int32, fm)
       {% begin %}
+        {% ids = {} of Nil => Nil %}
       case typeid
         {% for t in Raft::Log::Entry.all_subclasses %}
-      when {{t}}::TYPEID then entries.push {{t.id}}.from_io(io, fm)
+          {% typeid = t.constant(:ID) %}
+          {% if ! typeid.is_a?(NumberLiteral) || typeid > Int32::MAX || typeid < Int32::MIN %}
+            {% raise "#{t}::ID must be Int32" %}
+          {% end %}
+          {% if ids.keys.includes?(typeid) %}
+            {% raise "#{t.id}::ID (#{typeid}) cannot be the same as #{ids[typeid]}::ID" %}
+          {% else %}
+            {% ids[typeid] = t %}
+          {% end %}
+      when {{t}}::ID then entries.push {{t.id}}.from_io(io, fm)
         {% end %}
       end
       {% end %}
@@ -27,7 +37,19 @@ class Raft::Log
   end
 end
 
+# `ID` must be defined and it must be `Int32`
 abstract class Raft::Log::Entry
-  abstract def to_io(io : IO, fm : IO::ByteFormat)
+  abstract def iobody(io : IO, fm : IO::ByteFormat)
   abstract def from_io(io : IO, fm : IO::ByteFormat)
+
+  macro inherited
+    def self.from_io(io : IO, fm : IO::ByteFormat)
+      from_io(io, fm)
+    end
+
+    def to_io(io : IO, fm : IO::ByteFormat)
+      {{ @type }}::ID.to_io(io, fm)
+      iobody(io, fm)
+    end
+  end
 end
