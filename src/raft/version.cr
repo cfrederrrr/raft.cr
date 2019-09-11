@@ -1,7 +1,7 @@
 struct Raft::Version
-  include Comparable(Int32)
-  def <=>(other : Int32)
-    self.to_u <=> other
+  include Comparable(Raft::Version)
+  def <=>(other : Raft::Version)
+    self.to_u <=> other.to_u
   end
 
   MAJOR = 0_u8
@@ -14,14 +14,6 @@ struct Raft::Version
   # :nodoc:
   STRING = to_s
 
-  # Used to indicate the version of an outgoing `Raft::RPC::Packet` and to determine the
-  # safety of parsing and handling of an incoming `Raft::RPC::Packet`
-  def self.to_io(io : IO, fm : IO::ByteFormat = IO::ByteFormat::NetworkEndian)
-    MAJOR.to_io(io, fm)
-    MINOR.to_io(io, fm)
-    PATCH.to_io(io, fm)
-  end
-
   # Major revision
   getter major : UInt8
 
@@ -31,7 +23,22 @@ struct Raft::Version
   # Patch revision
   getter patch : UInt8
 
-  def initialize(@major = MAJOR, @minor = MINOR, @patch = PATCH)
+  def initialize(@major, @minor, @patch)
+  end
+
+  def self.from_io(io : IO, fm : IO::ByteFormat = IO::ByteFormat::NetworkEndian)
+    major = UInt8.from_io(io, fm)
+    minor = UInt8.from_io(io, fm)
+    patch = Uint8.from_io(io, fm)
+    new major, minor, patch
+  end
+
+  # Used to indicate the version of an outgoing `Raft::RPC::Packet` and to determine the
+  # safety of parsing and handling of an incoming `Raft::RPC::Packet`
+  def self.to_io(io : IO, fm : IO::ByteFormat = IO::ByteFormat::NetworkEndian)
+    MAJOR.to_io(io, fm)
+    MINOR.to_io(io, fm)
+    PATCH.to_io(io, fm)
   end
 
   # Checks whether this instance is the same as the current version
@@ -90,7 +97,7 @@ struct Raft::Version
     io << PATCH
   end
 
-  # Used to
+  # Used to define `Raft::VERSION` as a semantic version string
   def to_s(io : IO)
     io << @major << '.'
     io << @minor << '.'
