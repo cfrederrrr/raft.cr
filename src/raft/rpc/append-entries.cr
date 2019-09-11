@@ -1,6 +1,6 @@
 struct Raft::RPC::AppendEntries < Raft::RPC::Packet
   #:nodoc:
-  TYPEID = 0xAE_i16
+  ID = 0xAE_i16
 
   getter term : UInt32
   getter leader_id : UInt32
@@ -23,9 +23,12 @@ struct Raft::RPC::AppendEntries < Raft::RPC::Packet
     size = io.read_bytes(UInt8, fm)
     count = 0
     entries = [] of Raft::Log::Entry
+
     while count < size
       entries.push Raft::Log::Entry.from_io(io, fm)
-      io.read_bytes(UInt8, io)
+      rs = io.read_bytes(UInt8, io)
+      raise "expected RS but found #{rs}" if rs != RS
+      count += 1
     end
 
     new term, leader_id, prev_log_idx, prev_log_term, leader_commit, entries
@@ -44,7 +47,7 @@ struct Raft::RPC::AppendEntries < Raft::RPC::Packet
 
   def to_io(io : IO, fm : IO::ByteFM = FM)
     ::Raft::Version.to_io(io, fm)
-    TYPEID.to_io(io, fm)
+    ID.to_io(io, fm)
     @term.to_io(io, fm)
     @leader_id.to_io(io, fm)
     @leader_commit.to_io(io, fm)
@@ -60,7 +63,7 @@ end
 
 struct Raft::RPC::AppendEntries::Result < Raft::RPC::Packet
   #:nodoc:
-  TYPEID = -0xAE_i16
+  ID = -0xAE_i16
 
   getter term : UInt32
   getter success : Bool
@@ -79,21 +82,9 @@ struct Raft::RPC::AppendEntries::Result < Raft::RPC::Packet
   def initialize(@term, @success)
   end
 
-  # AppendEntries packet structure
-  #
-  # ```text
-  #  <--         32 bits          -->
-  # +--------------------------------+
-  # | Type indication (0xff000000)   |
-  # +--------------------------------+
-  # | Term                           |
-  # +--------------------------------+
-  # | Success                        |
-  # +--------------------------------+
-  # ```
   def to_io(io : IO, fm : IO::ByteFM = FM)
     Raft::Version.to_io(io, fm)
-    TYPEID.to_io(io, fm)
+    ID.to_io(io, fm)
     @term.to_io(io, fm)
     @success ? ACK.to_io(io, fm) : NAK.to_io(io, fm)
   end

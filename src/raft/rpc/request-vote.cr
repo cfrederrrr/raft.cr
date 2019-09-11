@@ -1,6 +1,6 @@
 struct Raft::RPC::RequestVote < Raft::RPC::Packet
   #:nodoc:
-  TYPEID = 0xF9_i16
+  ID = 0xF9_i16
 
   # The term associated with this RequestVote RPC
   getter term : UInt32
@@ -24,7 +24,7 @@ struct Raft::RPC::RequestVote < Raft::RPC::Packet
   end
 
   # Reads a `RequestVote` packet directly from an `IO`, starting _after_
-  # the `TYPEID` part of the packet; that is, `TYPEID` is only
+  # the `ID` part of the packet; that is, `ID` is only
   # present in the packet so that the socket knows what to expect when
   # reading from the `IO`
   def self.from_io(io : IO, fm : IO::ByteFM = FM)
@@ -50,7 +50,7 @@ struct Raft::RPC::RequestVote < Raft::RPC::Packet
 
   def to_io(io : IO, fm : IO::ByteFM = FM)
     Raft::Version.to_io(io, fm)
-    TYPEID.to_io(io, fm)
+    ID.to_io(io, fm)
     @term.to_io(io, fm)
     @candidate_id.to_io(io, fm)
     @last_log_idx.to_io(io, fm)
@@ -61,7 +61,7 @@ end
 
 struct Raft::RPC::RequestVote::Result < Raft::RPC::Packet
   #:nodoc:
-  TYPEID = -0xF9_i16
+  ID = -0xF9_i16
 
   # The term associated with this RequestVote RPC
   getter term : Int32
@@ -77,7 +77,7 @@ struct Raft::RPC::RequestVote::Result < Raft::RPC::Packet
   end
 
   # Reads a `RequestVote::Result` directly from an `IO` starting _after_
-  # the `TYPEID`
+  # the `ID`
   def self.from_io(io : IO)
     term = io.read_bytes(UInt32, fm)
     vote_granted = io.read_bytes(UInt32, FM)
@@ -91,7 +91,7 @@ struct Raft::RPC::RequestVote::Result < Raft::RPC::Packet
 
   def to_io(io : IO, fm : IO::ByteFM = FM)
     ::Raft::Version.to_io(io, fm)
-    TYPEID.to_io(io, fm)
+    ID.to_io(io, fm)
     @term.to_io(io, fm)
     @vote_granted ? ACK.to_io(io, fm) : NAK.to_io(io, fm)
     return io

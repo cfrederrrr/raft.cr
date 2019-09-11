@@ -30,21 +30,18 @@ module Raft::RPC
     abstract def to_io(io : IO, fm : IO::ByteFormat)
 
     def self.from_io(io : IO, fm : IO::ByteFormat = FM)
-      major = io.read_bytes(UInt8, fm)
-      minor = io.read_bytes(UInt8, fm)
-      patch = io.read_bytes(UInt8, fm)
-      version = Raft::Version.new(major, minor, patch)
+      version = Raft::Version.from_io(io, fm)
       raise "[#{io.remote_address}] - unsafe packet version '#{version}'" unless version.safe?
 
       typeid = io.read_bytes(Int16, fm)
       case typeid
-      when Raft::RPC::AppendEntries::TYPEID
+      when Raft::RPC::AppendEntries::ID
            Raft::RPC::AppendEntries.from_io(io, fm)
-      when Raft::RPC::AppendEntries::Result::TYPEID
+      when Raft::RPC::AppendEntries::Result::ID
            Raft::RPC::AppendEntries::Result.from_io(io, fm)
-      when Raft::RPC::RequestVote::TYPEID
+      when Raft::RPC::RequestVote::ID
            Raft::RPC::RequestVote.from_io(io, fm)
-      when Raft::RPC::RequestVote::Result::TYPEID
+      when Raft::RPC::RequestVote::Result::ID
            Raft::RPC::RequestVote::Result.from_io(io, fm)
       else
         raise "[#{io.remote_address}] - invalid typeid '#{typeid}'"
