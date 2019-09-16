@@ -44,7 +44,7 @@ struct Raft::RPC::RequestVote < Raft::RPC::Packet
   end
 
   def to_io
-    io = IO::Memory.new(PKTSIZE)
+    io = IO::Memory.new
     to_io(io, FM)
   end
 

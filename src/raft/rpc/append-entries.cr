@@ -46,7 +46,7 @@ struct Raft::RPC::AppendEntries < Raft::RPC::Packet
   end
 
   def to_io(io : IO, fm : IO::ByteFM = FM)
-    ::Raft::Version.to_io(io, fm)
+    Raft::Version.to_io(io, fm)
     ID.to_io(io, fm)
     @term.to_io(io, fm)
     @leader_id.to_io(io, fm)
