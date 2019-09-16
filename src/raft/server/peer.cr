@@ -1,32 +1,28 @@
 class Raft::Server::Peer
   getter address : String
-  @ssl : OpenSSL::SSL::Context?
-  @uri : URI
+
+  # SSL Context for the peer -
+  property ssl : OpenSSL::SSL::Context?
+
+  # The hostname of the peer
+  getter host : String
+
+  # The port of the peer
+  getter port : Int32 = 4290
+
+  # :nodoc:
   @socket : IO::Buffered|OpenSSL::SSL::Socket::Client?
 
   getter next_index : UInt64
   getter match_index : UInt64
 
-  def initialize(@address : String, @ssl : OpenSSL::SSL::Context? = nil)
-    @uri = URI.parse(string)
+  def self.new(address : String, ssl : OpenSSL::SSL::Context? = nil)
+    host, port = address.split(':')
+    new host, port, ssl
+  end
+
+  def initialize(@host, @port, @ssl)
     @socket = nil
-  end
-
-  def ssl=(ssl : OpenSSL::SSL::Context)
-    @ssl = ssl
-    socket
-  end
-
-  private def socket
-    return @socket if @socket && !@socket.closed?
-    skt = TCPSocket.new(@uri.host, @uri.port)
-    ssl = @ssl
-    if ssl
-      @socket = OpenSSL::SSL::Socket::Client.new(skt, context: ssl, sync_close: true, hostname: @uri.host)
-    else
-      @socket = skt
-    end
-    @socket
   end
 
   def send(request : Raft::RPC::Packet)
@@ -35,5 +31,17 @@ class Raft::Server::Peer
 
   def read
     packet = Raft::RPC::Packet.new(socket, FM)
+  end
+
+  private def socket
+    return @socket if @socket && !@socket.closed?
+    skt = TCPSocket.new(@host, @port)
+    ssl = @ssl
+    if ssl
+      @socket = OpenSSL::SSL::Socket::Client.new(skt, context: ssl, sync_close: true, hostname: @host)
+    else
+      @socket = skt
+    end
+    @socket
   end
 end
