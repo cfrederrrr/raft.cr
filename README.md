@@ -1,6 +1,6 @@
 # raft
 
-TODO: Write a description here
+[Raft](https://raft.github.io/) implementation for Crystal-Lang
 
 ## Installation
 
@@ -20,61 +20,58 @@ TODO: Write a description here
 require "raft"
 ```
 
-TODO: Write usage instructions here
-
 ## About
 This shard implements the specification laid out in the [raft paper](https://raft.github.io/raft.pdf) written by Diego Ongaro and John Ousterhout.
-
-It uses
 
 ### Packets
 
 #### Types
-+ `0xAE00` Append Entries RPC
-+ `0xAEF0` Append Entries Result
-+ `0xF900` Request Vote
-+ `0xF9F0` Request Vote Result
++ `+0xAE` Append Entries RPC
++ `-0xAE` Append Entries Result
++ `+0xF9` Request Vote
++ `-0xF9` Request Vote Result
 
 #### Requests
 
 ##### RequestVote
-Name | Size (160 Bits total)
+Name | Size
 -|-
-Version|24 Bits
-Type Indicator | 32 Bits
+Version | 24 Bits
+Type Indicator | 16 Bits
+Term | 32 Bits
 Candidate ID | 32 Bits
 Last log index | 32 Bits
 Last log term | 32 Bits
 
 ##### AppendEntries
-Name|Size (224 Bits total)
+Name|Size
 -|-
-Version| 24 Bits
-Type indication | 32 Bits
-Log Type Indicator | 32 Bits
+Version | 24 Bits
+Type indicator | 16 Bits
 Term | 32 Bits
 Leader ID | 32 Bits
 Leader Commit | 32 Bits
-Previous Log Term | 32 Bits
 Previous Log Index | 32 Bits
-Entries | 2+ Bits
+Previous Log Term | 32 Bits
+Size | 8 Bits
+Entries | 0+ Bits
 
 #### Results
 ##### RequestVote
 Name|Size
 -|-
-Version|24 Bits
-Type Indicator|32 Bits
+Version | 24 Bits
+Type Indicator | 32 Bits
 Term | 32 Bits
-Vote Granted | 32 Bits
+Vote Granted | 8 Bits
 
 ##### AppendEnties
 Name|Size
 -|-
-Version|24 Bits
-Type Indicator|32 Bits
-Term|32 Bits
-Success|32 Bits
+Version | 24 Bits
+Type Indicator | 32 Bits
+Term | 32 Bits
+Success | 8 Bits
 
 
 ## Contributing
