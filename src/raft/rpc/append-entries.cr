@@ -1,6 +1,6 @@
-struct Raft::RPC::AppendEntries < Raft::RPC::Packet
+class Raft::RPC::AppendEntries < Raft::RPC::Packet
   #:nodoc:
-  ID = 0xAE_i16
+  PIN = 0xAE_i16
 
   getter term : UInt32
   getter leader_id : UInt32
@@ -47,7 +47,7 @@ struct Raft::RPC::AppendEntries < Raft::RPC::Packet
 
   def to_io(io : IO, fm : IO::ByteFM = FM)
     Raft::Version.to_io(io, fm)
-    ID.to_io(io, fm)
+    PIN.to_io(io, fm)
     @term.to_io(io, fm)
     @leader_id.to_io(io, fm)
     @leader_commit.to_io(io, fm)
@@ -61,9 +61,9 @@ struct Raft::RPC::AppendEntries < Raft::RPC::Packet
   end
 end
 
-struct Raft::RPC::AppendEntries::Result < Raft::RPC::Packet
+class Raft::RPC::AppendEntries::Result < Raft::RPC::Packet
   #:nodoc:
-  ID = -0xAE_i16
+  PIN = -0xAE_i16
 
   getter term : UInt32
   getter success : Bool
@@ -84,7 +84,7 @@ struct Raft::RPC::AppendEntries::Result < Raft::RPC::Packet
 
   def to_io(io : IO, fm : IO::ByteFM = FM)
     Raft::Version.to_io(io, fm)
-    ID.to_io(io, fm)
+    PIN.to_io(io, fm)
     @term.to_io(io, fm)
     @success ? ACK.to_io(io, fm) : NAK.to_io(io, fm)
   end

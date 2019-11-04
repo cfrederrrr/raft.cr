@@ -11,12 +11,15 @@ class Raft::Server
   alias RequestVote = Raft::RPC::RequestVote
   alias AppendEntries = Raft::RPC::AppendEntries
 
-  # The ID number of the server. Used in communication so that
+  # The PIN number of the server. Used in communication so that
   # peers know who is sending messages
   @id : Int64 = Random.rand(Int64::MIN..Int64::MAX)
 
   # The port to listen for raft communications on
   @port : UInt16 = 4290
+
+  # The address of the interface to use
+  @host : String
 
   # List of remote peer `Raft::Server`s in the cluster
   @peers : Array(Raft::Server::Peer) = {} of Int64 => Raft::Server::Peer
@@ -26,6 +29,9 @@ class Raft::Server
 
   # The `@id` of the leading server or `nil` if this `Raft::Server` is leading
   @following : Int64? = nil
+
+  # The SSL context of this `Raft::Server`
+  @ssl : OpenSSL::SSL::Context? = nil
 
   # Election timeout in milliseconds. The `Raft::Server` will initiate an
   # election if this timeout is reached
@@ -114,6 +120,13 @@ class Raft::Server
   def become_leader
     @following = nil
     @leader = true
+  end
+
+  def connect_peer(addr : String)
+    if @ssl
+      peer = Raft::Peer.new(addr)
+    else
+      peer = Raft::Peer.new()
   end
 end
 

@@ -1,11 +1,11 @@
-struct Raft::RPC::RequestVote < Raft::RPC::Packet
+class Raft::RPC::RequestVote < Raft::RPC::Packet
   #:nodoc:
-  ID = 0xF9_i16
+  PIN = 0xF9_i16
 
   # The term associated with this RequestVote RPC
   getter term : UInt32
 
-  # The ID of the candidate campaigning to become leader of the cluster
+  # The PIN of the candidate campaigning to become leader of the cluster
   getter candidate_id : UInt32
 
   # Index of the candidate's last log entry.
@@ -24,10 +24,10 @@ struct Raft::RPC::RequestVote < Raft::RPC::Packet
   end
 
   # Reads a `RequestVote` packet directly from an `IO`, starting _after_
-  # the `ID` part of the packet; that is, `ID` is only
+  # the `PIN` part of the packet; that is, `PIN` is only
   # present in the packet so that the socket knows what to expect when
   # reading from the `IO`
-  def self.from_io(io : IO, fm : IO::ByteFM = FM)
+  def self.from_io(io : IO, fm : IO::ByteFormat = FM)
     term = io.read_bytes(UInt32, fm)
     candidate_id = io.read_bytes(UInt32, fm)
     last_log_idx = io.read_bytes(UInt32, fm)
@@ -50,7 +50,7 @@ struct Raft::RPC::RequestVote < Raft::RPC::Packet
 
   def to_io(io : IO, fm : IO::ByteFM = FM)
     Raft::Version.to_io(io, fm)
-    ID.to_io(io, fm)
+    PIN.to_io(io, fm)
     @term.to_io(io, fm)
     @candidate_id.to_io(io, fm)
     @last_log_idx.to_io(io, fm)
@@ -59,9 +59,9 @@ struct Raft::RPC::RequestVote < Raft::RPC::Packet
   end
 end
 
-struct Raft::RPC::RequestVote::Result < Raft::RPC::Packet
+class Raft::RPC::RequestVote::Result < Raft::RPC::Packet
   #:nodoc:
-  ID = -0xF9_i16
+  PIN = -0xF9_i16
 
   # The term associated with this RequestVote RPC
   getter term : Int32
@@ -77,7 +77,7 @@ struct Raft::RPC::RequestVote::Result < Raft::RPC::Packet
   end
 
   # Reads a `RequestVote::Result` directly from an `IO` starting _after_
-  # the `ID`
+  # the `PIN`
   def self.from_io(io : IO)
     term = io.read_bytes(UInt32, fm)
     vote_granted = io.read_bytes(UInt32, FM)
@@ -90,8 +90,8 @@ struct Raft::RPC::RequestVote::Result < Raft::RPC::Packet
   end
 
   def to_io(io : IO, fm : IO::ByteFM = FM)
-    ::Raft::Version.to_io(io, fm)
-    ID.to_io(io, fm)
+    Raft::Version.to_io(io, fm)
+    PIN.to_io(io, fm)
     @term.to_io(io, fm)
     @vote_granted ? ACK.to_io(io, fm) : NAK.to_io(io, fm)
     return io

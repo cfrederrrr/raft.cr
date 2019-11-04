@@ -18,16 +18,16 @@ class Raft::Log
         {% ids = {} of Nil => Nil %}
       case typeid
         {% for t in Raft::Log::Entry.all_subclasses %}
-          {% typeid = t.constant(:ID) %}
+          {% typeid = t.constant(:PIN) %}
           {% if ! typeid.is_a?(NumberLiteral) || typeid > Int32::MAX || typeid < Int32::MIN %}
-            {% raise "#{t}::ID must be Int32" %}
+            {% raise "#{t}::PIN must be Int32" %}
           {% end %}
           {% if ids.keys.includes?(typeid) %}
-            {% raise "#{t.id}::ID (#{typeid}) cannot be the same as #{ids[typeid]}::ID" %}
+            {% raise "#{t.id}::PIN (#{typeid}) cannot be the same as #{ids[typeid]}::PIN" %}
           {% else %}
             {% ids[typeid] = t %}
           {% end %}
-      when {{t}}::ID then entries.push {{t.id}}.from_io(io, fm)
+      when {{t}}::PIN then entries.push {{t.id}}.from_io(io, fm)
         {% end %}
       end
       {% end %}
@@ -37,7 +37,7 @@ class Raft::Log
   end
 end
 
-# `ID` must be defined and it must be `Int32`
+# `PIN` must be defined and it must be `Int32`
 abstract class Raft::Log::Entry
   abstract def iobody(io : IO, fm : IO::ByteFormat)
   abstract def from_io(io : IO, fm : IO::ByteFormat)
@@ -48,7 +48,7 @@ abstract class Raft::Log::Entry
     end
 
     def to_io(io : IO, fm : IO::ByteFormat)
-      {{ @type }}::ID.to_io(io, fm)
+      {{ @type }}::PIN.to_io(io, fm)
       iobody(io, fm)
     end
   end

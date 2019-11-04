@@ -1,5 +1,5 @@
 module Raft::RPC
-  abstract struct Packet
+  abstract class Packet
     # Single byte control characters, written in binary notation
     # to ensure that there are no accidental duplicates
     #
@@ -31,18 +31,22 @@ module Raft::RPC
 
     def self.from_io(io : IO, fm : IO::ByteFormat = FM)
       version = Raft::Version.from_io(io, fm)
-      raise "[#{io.remote_address}] - unsafe packet version '#{version}'" unless version.safe?
+      raise Raft::Version::Mismatch.new(version) unless version.safe?
 
       typeid = io.read_bytes(Int16, fm)
       case typeid
-      when Raft::RPC::AppendEntries::ID
+      when Raft::RPC::AppendEntries::PIN
            Raft::RPC::AppendEntries.from_io(io, fm)
-      when Raft::RPC::AppendEntries::Result::ID
+      when Raft::RPC::AppendEntries::Result::PIN
            Raft::RPC::AppendEntries::Result.from_io(io, fm)
-      when Raft::RPC::RequestVote::ID
+      when Raft::RPC::RequestVote::PIN
            Raft::RPC::RequestVote.from_io(io, fm)
-      when Raft::RPC::RequestVote::Result::ID
+      when Raft::RPC::RequestVote::Result::PIN
            Raft::RPC::RequestVote::Result.from_io(io, fm)
+      when Raft::RPC::HandShake::PIN
+           Raft::RPC::HandShake.from_io(io, fm)
+      when Raft::RPC::HandShake::Result::PIN
+           Raft::RPC::HandShake::Result.new(io, fm)
       else
         raise "[#{io.remote_address}] - invalid typeid '#{typeid}'"
       end

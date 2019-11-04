@@ -106,3 +106,9 @@ struct Raft::Version
 end
 
 Raft::VERSION = Raft::Version.to_s
+
+class Raft::Version::UnsafeError < Exception
+  def initialize(version : Raft::Version)
+    super("unsafe packet version (#{version})")
+  end
+end
