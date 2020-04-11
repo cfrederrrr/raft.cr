@@ -1,5 +1,12 @@
 struct Raft::Version
   include Comparable(Raft::Version)
+
+  class UnsafeError < Exception
+    def initialize(version : Raft::Version)
+      super("unsafe packet version (#{version})")
+    end
+  end
+
   def <=>(other : Raft::Version)
     self.to_u <=> other.to_u
   end
@@ -106,9 +113,3 @@ struct Raft::Version
 end
 
 Raft::VERSION = Raft::Version.to_s
-
-class Raft::Version::UnsafeError < Exception
-  def initialize(version : Raft::Version)
-    super("unsafe packet version (#{version})")
-  end
-end

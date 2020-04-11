@@ -1,4 +1,6 @@
 module Raft
+  alias PacketFormat = IO::ByteFormat::NetworkEndian
+  alias DiskFormat = IO::ByteFormat::SystemEndian
 end
 
 require "./raft/version"

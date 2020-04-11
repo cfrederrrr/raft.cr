@@ -6,7 +6,7 @@ class Raft::RPC::RequestVote < Raft::RPC::Packet
   getter term : UInt32
 
   # The PIN of the candidate campaigning to become leader of the cluster
-  getter candidate_id : UInt32
+  getter candidate_id : Int64
 
   # Index of the candidate's last log entry.
   # If the receiver's `@last_log_idx` is greater than the one associated
@@ -29,7 +29,7 @@ class Raft::RPC::RequestVote < Raft::RPC::Packet
   # reading from the `IO`
   def self.from_io(io : IO, fm : IO::ByteFormat = FM)
     term = io.read_bytes(UInt32, fm)
-    candidate_id = io.read_bytes(UInt32, fm)
+    candidate_id = io.read_bytes(Int64, fm)
     last_log_idx = io.read_bytes(UInt32, fm)
     last_log_term = io.read_bytes(UInt32, fm)
     endoftext = io.read_bytes(UInt8, fm)

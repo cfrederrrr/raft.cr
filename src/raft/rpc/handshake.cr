@@ -4,6 +4,10 @@
 # A handshake will occur every time a server connects to another,
 # including after restarts, network timeouts, etc.
 #
+# Critically, a handshake packet is for a clean opening of the underlying,
+# persistent TCP/SSL connection, but also carries the ID of the server
+# since ID is unique per runtime
+#
 # No other transaction can occur between servers until the handshake
 # is successful. Luckily, it is rather simple to complete, as it is
 # nothing more than sharing `Raft::Version` and `Raft::Server#id`

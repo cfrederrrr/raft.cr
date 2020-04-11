@@ -3,7 +3,7 @@ class Raft::RPC::AppendEntries < Raft::RPC::Packet
   PIN = 0xAE_i16
 
   getter term : UInt32
-  getter leader_id : UInt32
+  getter leader_id : Int64
   getter leader_commit : UInt32
   getter prev_log_idx : UInt32
   getter prev_log_term : UInt32
@@ -15,7 +15,7 @@ class Raft::RPC::AppendEntries < Raft::RPC::Packet
 
   def self.from_io(io : IO, fm : IO::ByteFM = FM)
     term = io.read_bytes(UInt32, fm)
-    leader_id = io.read_bytes(UInt32, fm)
+    leader_id = io.read_bytes(Int64, fm)
     leader_commit = io.read_bytes(UInt32, fm)
     prev_log_idx = io.read_bytes(UInt32, fm)
     prev_log_term = io.read_bytes(UInt32, fm)
