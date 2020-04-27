@@ -1,5 +1,6 @@
+# Stores the entries and manages consensus
 class Raft::Log
-  @entries : Array(Raft::Log::Entry)
+  @entries : Array(Entry) = [] of Entry
 
   def to_io(io : IO, fm : IO::ByteFormat)
     @entries.each do |entry|
@@ -7,27 +8,27 @@ class Raft::Log
     end
   end
 
-  def initialize(@entries : Array(Raft::Log::Entry))
+  def initialize(@entries : Array(Entry))
   end
 
-  def self.from_io(io : IO::Buffered, fm : IO::ByteFormat = IO::ByteFormat::NetworkEndian)
-    entries = [] of Raft::Log::Entry
+  def self.from_io(io : IO::Buffered, fm : IO::ByteFormat = NetworkEndian)
+    entries = [] of Entry
     while io.peek.any?
       typeid = io.read_bytes(Int32, fm)
       {% begin %}
         {% ids = {} of Nil => Nil %}
       case typeid
-        {% for t in Raft::Log::Entry.all_subclasses %}
-          {% typeid = t.constant(:PIN) %}
-          {% if ! typeid.is_a?(NumberLiteral) || typeid > Int32::MAX || typeid < Int32::MIN %}
-            {% raise "#{t}::PIN must be Int32" %}
+        {% for t in Entry.all_subclasses %}
+          {% typeid = t.constant(:TNUM) %}
+          {% if ! tnum.is_a?(NumberLiteral) || tnum > Int32::MAX || tnum < Int32::MIN %}
+            {% raise "#{t}::TNUM must be Int32" %}
           {% end %}
           {% if ids.keys.includes?(typeid) %}
-            {% raise "#{t.id}::PIN (#{typeid}) cannot be the same as #{ids[typeid]}::PIN" %}
+            {% raise "#{t.id}::TNUM (#{typeid}) cannot be the same as #{ids[typeid]}::TNUM" %}
           {% else %}
             {% ids[typeid] = t %}
           {% end %}
-      when {{t}}::PIN then entries.push {{t.id}}.from_io(io, fm)
+      when {{t}}::TNUM then entries.push {{t.id}}.from_io(io, fm)
         {% end %}
       end
       {% end %}
@@ -37,7 +38,7 @@ class Raft::Log
   end
 end
 
-# `PIN` must be defined and it must be `Int32`
+# `TNUM` must be defined and it must be `Int32`
 abstract class Raft::Log::Entry
   abstract def iobody(io : IO, fm : IO::ByteFormat)
   abstract def from_io(io : IO, fm : IO::ByteFormat)
@@ -48,7 +49,7 @@ abstract class Raft::Log::Entry
     end
 
     def to_io(io : IO, fm : IO::ByteFormat)
-      {{ @type }}::PIN.to_io(io, fm)
+      {{ @type }}::TNUM.to_io(io, fm)
       iobody(io, fm)
     end
   end

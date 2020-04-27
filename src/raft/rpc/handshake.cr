@@ -13,9 +13,9 @@
 # nothing more than sharing `Raft::Version` and `Raft::Server#id`
 class Raft::RPC::HandShake < Raft::RPC::Packet
   #:nodoc:
-  PIN = 0x01_i16
+  TNUM = 0x01_i16
 
-  # PIN of the server initiating the handshake
+  # TNUM of the server initiating the handshake
   getter id : UInt32
 
   def initialize(@id)
@@ -28,7 +28,7 @@ class Raft::RPC::HandShake < Raft::RPC::Packet
 
   def to_io(io : IO, fm : IO::ByteFormat = FM)
     Raft::Version.to_io(io, fm)
-    PIN.to_io(io, fm)
+    TNUM.to_io(io, fm)
     @id.to_io(io, fm)
   end
 end

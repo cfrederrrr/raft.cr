@@ -4,7 +4,7 @@
 class Raft::Server::Listener
   # The transport object
   @server : TCPSocket|OpenSSL::SSL::Server
-  @new_conns : Array(TCPSocket|OpenSSL::SSL::Server)
+  @new_conns : Array(TCPSocket|OpenSSL::SSL::Server) = [] of TCPSocket|OpenSSL::SSL::Server
 
   def initialize(
       server : TCPSocket|OpenSSL::SSL::Server,

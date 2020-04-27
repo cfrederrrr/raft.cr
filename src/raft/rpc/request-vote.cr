@@ -1,11 +1,11 @@
 class Raft::RPC::RequestVote < Raft::RPC::Packet
   #:nodoc:
-  PIN = 0xF9_i16
+  TNUM = 0xF9_i16
 
   # The term associated with this RequestVote RPC
   getter term : UInt32
 
-  # The PIN of the candidate campaigning to become leader of the cluster
+  # The TNUM of the candidate campaigning to become leader of the cluster
   getter candidate_id : Int64
 
   # Index of the candidate's last log entry.
@@ -24,7 +24,7 @@ class Raft::RPC::RequestVote < Raft::RPC::Packet
   end
 
   # Reads a `RequestVote` packet directly from an `IO`, starting _after_
-  # the `PIN` part of the packet; that is, `PIN` is only
+  # the `TNUM` part of the packet; that is, `TNUM` is only
   # present in the packet so that the socket knows what to expect when
   # reading from the `IO`
   def self.from_io(io : IO, fm : IO::ByteFormat = FM)
@@ -50,7 +50,7 @@ class Raft::RPC::RequestVote < Raft::RPC::Packet
 
   def to_io(io : IO, fm : IO::ByteFM = FM)
     Raft::Version.to_io(io, fm)
-    PIN.to_io(io, fm)
+    TNUM.to_io(io, fm)
     @term.to_io(io, fm)
     @candidate_id.to_io(io, fm)
     @last_log_idx.to_io(io, fm)
@@ -59,9 +59,9 @@ class Raft::RPC::RequestVote < Raft::RPC::Packet
   end
 end
 
-class Raft::RPC::RequestVote::Result < Raft::RPC::Packet
+class Raft::RPC::RequestVoteResult < Raft::RPC::Packet
   #:nodoc:
-  PIN = -0xF9_i16
+  TNUM = -0xF9_i16
 
   # The term associated with this RequestVote RPC
   getter term : Int32
@@ -77,7 +77,7 @@ class Raft::RPC::RequestVote::Result < Raft::RPC::Packet
   end
 
   # Reads a `RequestVote::Result` directly from an `IO` starting _after_
-  # the `PIN`
+  # the `TNUM`
   def self.from_io(io : IO)
     term = io.read_bytes(UInt32, fm)
     vote_granted = io.read_bytes(UInt32, FM)
@@ -91,7 +91,7 @@ class Raft::RPC::RequestVote::Result < Raft::RPC::Packet
 
   def to_io(io : IO, fm : IO::ByteFM = FM)
     Raft::Version.to_io(io, fm)
-    PIN.to_io(io, fm)
+    TNUM.to_io(io, fm)
     @term.to_io(io, fm)
     @vote_granted ? ACK.to_io(io, fm) : NAK.to_io(io, fm)
     return io

@@ -9,17 +9,22 @@ class Raft::Peer
   getter port : Int32 = 4290
 
   getter id : Int64
-  property timeout : Float32
+  property timeout : Float32 = Time::Span.new(nanoseconds: 300_000_000)
 
   # :nodoc:
   @socket : TCPSocket|OpenSSL::SSL::Socket::Client?
 
-  getter next_index : UInt64
-  getter match_index : UInt64
+  getter next_index : UInt64 = 0_u64
+  getter match_index : UInt64 = 0_u64
 
-  def self.new(id : Int64, address : String, tls : OpenSSL::SSL::Context::Client? = nil)
+  def self.new(
+      id : Int64,
+      address : String,
+      tls : OpenSSL::SSL::Context::Client? = nil
+    )
+
     host, port = address.split(':')
-    new host, port.to_i, tls
+    new host, port, port.to_i, tls
   end
 
   def initialize(@id, @address, @port, @tls = nil)

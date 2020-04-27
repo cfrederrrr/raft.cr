@@ -1,19 +1,19 @@
 class Raft::RPC::AppendEntries < Raft::RPC::Packet
   #:nodoc:
-  PIN = 0xAE_i16
+  TNUM = 0xAE_i16
 
   getter term : UInt32
   getter leader_id : Int64
   getter leader_commit : UInt32
   getter prev_log_idx : UInt32
   getter prev_log_term : UInt32
-  getter entries : Array(Raft::Log::Entry)
+  getter entries : Array(Log::Entry)
 
-  def self.new(io : IO, fm : IO::ByteFM = FM)
+  def self.new(io : IO, fm : IO::ByteFormat = PacketFormat)
     from_io(io, fm)
   end
 
-  def self.from_io(io : IO, fm : IO::ByteFM = FM)
+  def self.from_io(io : IO, fm : IO::ByteFormat = PacketFormat)
     term = io.read_bytes(UInt32, fm)
     leader_id = io.read_bytes(Int64, fm)
     leader_commit = io.read_bytes(UInt32, fm)
@@ -22,10 +22,10 @@ class Raft::RPC::AppendEntries < Raft::RPC::Packet
 
     size = io.read_bytes(UInt8, fm)
     count = 0
-    entries = [] of Raft::Log::Entry
+    entries = [] of Log::Entry
 
     while count < size
-      entries.push Raft::Log::Entry.from_io(io, fm)
+      entries.push Log::Entry.from_io(io, fm)
       rs = io.read_bytes(UInt8, io)
       raise "expected RS but found #{rs}" if rs != RS
       count += 1
@@ -34,10 +34,17 @@ class Raft::RPC::AppendEntries < Raft::RPC::Packet
     new term, leader_id, prev_log_idx, prev_log_term, leader_commit, entries
   end
 
-  def self.read_entry(io : IO, fm : IO::ByteFM = FM)
+  def self.read_entry(io : IO, fm : IO::ByteFormat = PacketFormat)
   end
 
-  def initialize(@term, @leader_id, @leader_commit, @prev_log_idx, @prev_log_term, @entries)
+  def initialize(
+      @term,
+      @leader_id,
+      @leader_commit,
+      @prev_log_idx,
+      @prev_log_term,
+      @entries
+    )
   end
 
   def to_io
@@ -45,9 +52,9 @@ class Raft::RPC::AppendEntries < Raft::RPC::Packet
     to_io(io, FM)
   end
 
-  def to_io(io : IO, fm : IO::ByteFM = FM)
-    Raft::Version.to_io(io, fm)
-    PIN.to_io(io, fm)
+  def to_io(io : IO, fm : IO::ByteFormat = PacketFormat)
+    Version.to_io(io, fm)
+    TNUM.to_io(io, fm)
     @term.to_io(io, fm)
     @leader_id.to_io(io, fm)
     @leader_commit.to_io(io, fm)
@@ -61,30 +68,30 @@ class Raft::RPC::AppendEntries < Raft::RPC::Packet
   end
 end
 
-class Raft::RPC::AppendEntries::Result < Raft::RPC::Packet
+class Raft::RPC::AppendEntriesResult < Raft::RPC::Packet
   #:nodoc:
-  PIN = -0xAE_i16
+  TNUM = -0xAE_i16
 
   getter term : UInt32
   getter success : Bool
 
-  def self.new(io : IO, fm : IO::ByteFM = FM)
+  def self.new(io : IO, fm : IO::ByteFormat = PacketFormat)
     from_io(io, fm)
   end
 
-  def self.from_io(io : IO, fm : IO::ByteFM = FM)
+  def self.from_io(io : IO, fm : IO::ByteFormat = PacketFormat)
     term = io.read_bytes(UInt32, fm)
     success_val = io.read_bytes(UInt8, fm)
-    success = success_val == ACK ? true : false
+    success = success_val == ACK
     new term, success
   end
 
   def initialize(@term, @success)
   end
 
-  def to_io(io : IO, fm : IO::ByteFM = FM)
+  def to_io(io : IO, fm : IO::ByteFormat = PacketFormat)
     Raft::Version.to_io(io, fm)
-    PIN.to_io(io, fm)
+    TNUM.to_io(io, fm)
     @term.to_io(io, fm)
     @success ? ACK.to_io(io, fm) : NAK.to_io(io, fm)
   end
