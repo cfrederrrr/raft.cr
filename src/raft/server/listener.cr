@@ -18,14 +18,5 @@ class Raft::Server::Listener
   end
 
   def listen
-    spawn do
-      loop do
-        if client = @server.accept?
-
-        else
-
-        end
-      end
-    end
   end
 end

@@ -1,5 +1,5 @@
 # The state machine managed by raft.
-abstract class Raft::State
+abstract class Raft::StateMachine
   # Must define a way of reading state values so that service
   # clients can obtain data.
   #
