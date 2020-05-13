@@ -104,7 +104,7 @@ class Raft::Server
             # have to figure out how to create peer by reading the handshake
             # packet that will be coming through this socket. we need
             # the ID from that packet so we should probably expect
-            # a `RPC::Handshake` and get the id that way. this might solve the
+            # a `RPC::Hello` and get the id that way. this might solve the
             # problem above too
             id = #something
             peer = Peer.new(remote.address, remote.port, id, @tls)
@@ -213,7 +213,7 @@ class Raft::Server
       peer = Raft::Peer.new(addr, port, _tls)
     end
 
-    peer.send(Raft::RPC::HandShake.new())
+    peer.send(Raft::RPC::Hello.new())
     result = peer.read()
   end
 end

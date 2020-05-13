@@ -1,5 +1,6 @@
 # Stores the entries and manages consensus
 class Raft::Log
+  getter commit_index : UInt64
   @entries : Array(Entry) = [] of Entry
 
   def to_io(io : IO, fm : IO::ByteFormat)

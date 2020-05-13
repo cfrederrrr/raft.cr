@@ -23,7 +23,7 @@ module Raft::RPC
   NAK = 0x15_u8
 
   # [Record Separator](https://codepoints.net/U+001E) - Used in `Packet` to separate `Packet::Entry`
-  RS = 0x1E_u8
+  SEP = 0x1E_u8
 end
 
 abstract class Raft::RPC::Packet
@@ -33,8 +33,8 @@ abstract class Raft::RPC::Packet
     version = Raft::Version.from_io(io, fm)
     raise Raft::Version::Mismatch.new(version) unless version.safe?
 
-    pin = io.read_bytes(Int16, fm)
-    case pin
+    tnum = io.read_bytes(Int16, fm)
+    case tnum
     when AppendEntries::TNUM
       AppendEntries.from_io(io, fm)
     when AppendEntriesResult::TNUM
@@ -43,9 +43,9 @@ abstract class Raft::RPC::Packet
       RequestVote.from_io(io, fm)
     when RequestVoteResult::TNUM
       RequestVoteResult.from_io(io, fm)
-    when HandShake::TNUM
-      HandShake.from_io(io, fm)
-    else raise PacketError.new("invalid packet id number '#{pin}'")
+    when Hello::TNUM
+      Hello.from_io(io, fm)
+    else raise PacketError.new("invalid packet id number '#{tnum}'")
     end
   end
 end

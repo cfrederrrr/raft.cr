@@ -1,8 +1,14 @@
 require "socket"
 require "openssl"
 require "./state-machine"
+require "./config"
 
-class Raft::Service
+enum Raft::State
+  Stopped
+  Starting
+  Joined
+  Running
+  Leading
 end
 
 # Provides several functions:
@@ -34,10 +40,10 @@ class Raft::Server
   getter term : UInt64 = 0_u64
 
   # The address peers will use to connect to this server
-  @cluster_listener : Listener
+  @cluster : Listener
 
   # The address clients will use to access the service
-  @service_listener : Service
+  @service : Listener
 
   # Peers to this cluster
   getter peers : Array(Peer) = [] of Peer
@@ -47,44 +53,101 @@ class Raft::Server
 
   # Timeout is the time in milliseconds to wait for the leader before
   # initiating an election
-  setter running : Bool
+  @state : State
 
   getter config : Config
 
-  @state_machine : StateMachine
+  @fsm : StateMachine
   @log : Log = Log.new
 
-  def initialize(@config, @state_machine)
-    @cluster_listener = Listener.new(@config.cluster_addr)
-    @service_listener = Service.new(@config.service_addr)
+  def initialize(@config, @fsm)
+    @listener = Listener.new(@config.cluster)
+    @service = Service.new(@config.service)
     @following = @id = Random.rand(Int64::Min..Int64::MAX)
     @peers = [] of Peer
-    @running = false
+    @state = State::Stopped
   end
 
-  def join_cluster : Bool
-    spawn do
+  def join_cluster : State
+    # send handshake to known peers right away
+    @peers.each do |peer|
+      handshake = Hello.new(@id)
+      peer.send(handshake)
     end
 
-    return true
+    # then check config for other expected peers
+    @config.peers.each do |addr|
+      peer = Peer.new(addr, @config.tls)
+      @peers.push(peer) if result.ok?
+    end
+
+    @peers.each do |peer|
+      spawn do
+        handshake = Hello.new(@id)
+        result = peer.send handshake
+      end
+    end
+
+    @peers.each do |peer|
+      spawn do
+        result = peer.read(@config.heartbeat * 2)
+        if result.is_a?(Hello)
+        else
+        end
+      end
+    end
+
+    return State::Joined
   end
 
-  def participate : Bool
-    spawn do
-    end
+  def leave_cluster : State
+    stop_service
 
-    return true
   end
 
   def start_service
-    spawn {}
+    return State::Running
+  end
+
+  def stop_service
+  end
+
+  def participate(with channel : Channel(Bool)) : Bool
+    spawn do
+      while @state.running?
+        @peers.each do |peer|
+          entries = @log.entries[peer.commit_index..@log.commit_index]
+        end
+      end
+    end
+
+    channel.send(true)
+    return true
   end
 
   def launch
-    if join_cluster
-      partitipate_cluster
-      start_service
+    timeout_switch = Channel(Bool).new
+    @state = State::Starting
+    @state = join_cluster
+    @state = start_service
+
+    if @state < State::Joined
+      @state = State::Stopped
+      return @state
     end
+
+    spawn do
+      while participating?
+        partitipate(with: timeout_switch)
+        timed_out = timeout_switch.receive
+        if timed_out
+          election = campaign
+          @state = State::LEADING if election.won?
+        end
+      end
+    end
+
+    return @state
   end
 
   def replicate_entries
@@ -167,6 +230,8 @@ class Raft::Server
       end
     end
   end
-end
 
-require "./server/config"
+  def participating?
+    @state >= State::Joined
+  end
+end

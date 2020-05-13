@@ -18,16 +18,11 @@ class Raft::RPC::RequestVote < Raft::RPC::Packet
   # with this RequestVote RPC, the vote will be denied.
   getter last_log_term : UInt32
 
-  #
-  def self.new(io : IO)
-    from_io(io, FM)
-  end
-
   # Reads a `RequestVote` packet directly from an `IO`, starting _after_
   # the `TNUM` part of the packet; that is, `TNUM` is only
   # present in the packet so that the socket knows what to expect when
   # reading from the `IO`
-  def self.from_io(io : IO, fm : IO::ByteFormat = FM)
+  def self.from_io(io : IO, fm : IO::ByteFormat)
     term = io.read_bytes(UInt32, fm)
     candidate_id = io.read_bytes(Int64, fm)
     last_log_idx = io.read_bytes(UInt32, fm)
@@ -48,7 +43,7 @@ class Raft::RPC::RequestVote < Raft::RPC::Packet
     to_io(io, FM)
   end
 
-  def to_io(io : IO, fm : IO::ByteFM = FM)
+  def to_io(io : IO, fm : IO::ByteFormat)
     Raft::Version.to_io(io, fm)
     TNUM.to_io(io, fm)
     @term.to_io(io, fm)
@@ -64,7 +59,7 @@ class Raft::RPC::RequestVoteResult < Raft::RPC::Packet
   TNUM = -0xF9_i16
 
   # The term associated with this RequestVote RPC
-  getter term : Int32
+  getter term : UInt32
 
   # Indicates whether or not the vote was granted to the candidate
   getter vote_granted : Bool
@@ -78,7 +73,7 @@ class Raft::RPC::RequestVoteResult < Raft::RPC::Packet
 
   # Reads a `RequestVote::Result` directly from an `IO` starting _after_
   # the `TNUM`
-  def self.from_io(io : IO)
+  def self.from_io(io : IO, fm : IO::ByteFormat)
     term = io.read_bytes(UInt32, fm)
     vote_granted = io.read_bytes(UInt32, FM)
     new term, (vote_granted == ACK)
@@ -89,7 +84,7 @@ class Raft::RPC::RequestVoteResult < Raft::RPC::Packet
     to_io(io, FM)
   end
 
-  def to_io(io : IO, fm : IO::ByteFM = FM)
+  def to_io(io : IO, fm : IO::ByteFormat)
     Raft::Version.to_io(io, fm)
     TNUM.to_io(io, fm)
     @term.to_io(io, fm)

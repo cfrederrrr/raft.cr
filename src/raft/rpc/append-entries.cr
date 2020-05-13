@@ -9,11 +9,11 @@ class Raft::RPC::AppendEntries < Raft::RPC::Packet
   getter prev_log_term : UInt32
   getter entries : Array(Log::Entry)
 
-  def self.new(io : IO, fm : IO::ByteFormat = PacketFormat)
+  def self.new(io : IO, fm : IO::ByteFormat)
     from_io(io, fm)
   end
 
-  def self.from_io(io : IO, fm : IO::ByteFormat = PacketFormat)
+  def self.from_io(io : IO, fm : IO::ByteFormat)
     term = io.read_bytes(UInt32, fm)
     leader_id = io.read_bytes(Int64, fm)
     leader_commit = io.read_bytes(UInt32, fm)
@@ -27,14 +27,14 @@ class Raft::RPC::AppendEntries < Raft::RPC::Packet
     while count < size
       entries.push Log::Entry.from_io(io, fm)
       rs = io.read_bytes(UInt8, io)
-      raise "expected RS but found #{rs}" if rs != RS
+      raise "expected 0x1E but found #{rs}" if rs != SEP
       count += 1
     end
 
     new term, leader_id, prev_log_idx, prev_log_term, leader_commit, entries
   end
 
-  def self.read_entry(io : IO, fm : IO::ByteFormat = PacketFormat)
+  def self.read_entry(io : IO, fm : IO::ByteFormat)
   end
 
   def initialize(
@@ -63,7 +63,7 @@ class Raft::RPC::AppendEntries < Raft::RPC::Packet
     UInt8.new(@entries.size).to_io(io, fm)
     @entries.each do |entry|
       entry.to_io(io, fm)
-      RS.to_io(io, fm)
+      SEP.to_io(io, fm)
     end
   end
 end

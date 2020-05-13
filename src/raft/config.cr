@@ -18,13 +18,13 @@ require "openssl"
 # config = Raft::Server::Config.load_json("/path/to/config.json")
 # ```
 
-alias Raft::Config::Raw =
-  Hash(String, String | Int32 | Hash(String, String | Int32))
 
 struct Raft::Config
-  getter cluster : Port
-  getter service : Port
-  getter timeout : Time::Span
+  alias Raw = Hash(String, String | Int32 | Hash(String, String | Int32))
+
+  getter cluster : Cluster
+  getter service : Service
+  getter heartbeat : Time::Span
   getter tls : OpenSSL::SSL::Context::Server?
 
   def self.new(general : Raw, cluster : Raw, service : Raw)
@@ -33,10 +33,10 @@ struct Raft::Config
     s_uri.port = 4920 if (s_uri.port.nil? && s_uri.scheme == "raft")
     service_adder = Socket::IPAddress.new(s_uri.host, s_uri.port)
     cluster = Cluster.new
-    new cluster, service, timeout, tls
+    new cluster, service, heartbeat, tls
   end
 
-  def initialize(@cluster, @service, @timeout, @tls)
+  def initialize(@cluster, @service, @heartbeat, @tls)
   end
 end
 
@@ -60,18 +60,18 @@ struct Raft::Config::Cluster
   address : URI
   certfile : String?
   pkeyfile : String?
-  timeout : Time::Span
+  heartbeat : Time::Span
 
-  def self.new(addr : String, cert : String?, pkey : String?, tout : Int)
+  def self.new(addr : String, cert : String?, pkey : String?, hbeat : Int)
     uri = URI.parse(p_addr)
     uri = URI.parse("raft://" + p_addr)
     uri.port = 4291 if (p_uri.port.nil? && p_uri.scheme == "raft")
     cluster_addr = Socket::IPAddress.new(p_uri.host, p_uri.port)
-    timeout = Time::Span.new(nanoseconds: tout * 1_000_000)
-    new cluster_addr, cert, pkey, timeout
+    heartbeat = Time::Span.new(nanoseconds: hbeat * 1_000_000)
+    new cluster_addr, cert, pkey, heartbeat
   end
 
-  def initialize(@address, @certfile, @pkeyfile, @timeout)
+  def initialize(@address, @certfile, @pkeyfile, @heartbeat)
   end
 end
 
@@ -81,16 +81,25 @@ end
 
 def Raft::Config.from_{{lang.id}}(data : String)
   conf = {{const.id}}.parse(data)
-  cluster = Listener.new(
 
-  )
-
-  general = conf[""]? || conf
+  general = conf[""]? || conf["general"]? || conf
   cluster_conf = conf["cluster"]
   service_conf = conf["service"]
-  timeout = conf["cluster"]
-  tls = conf["tls"]?
-  new general, cluster_conf, service_conf, timeout, tls
+  heartbeat = general["heartbeat"]
+  tls = conf["tls"]? || general["tls"]?
+  {% if lang == "ini" %}
+  defined_sections = ["cluster", "service", "general", "", "tls"]
+  peers = [] of Hash(String,String)
+  sections = conf.each do |key, val|
+    next if defined_sections.includes?(key)
+    peer = val
+    peer["id"] = key
+    peers.push(peer)
+  end
+  new general, cluster_conf, service_conf, heartbeat, tls
+  {% else %}
+  new general.as_h, cluster_conf.as_h, service_conf.as_h, heartbeat.as_s, tls.as_h
+  {% end %}
 end
 
 def Raft::Server::Config.load_{{lang.id}}(file : String)

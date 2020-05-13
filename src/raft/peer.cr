@@ -1,49 +1,48 @@
 class Raft::Peer
-  # The address of the peer
-  getter address : String
-
-  # SSL Context for the peer
-  property tls : OpenSSL::SSL::Context::Client?
-
-  # The port of the peer
-  getter port : Int32 = 4290
-
   getter id : Int64
-  property timeout : Float32 = Time::Span.new(nanoseconds: 300_000_000)
 
   # :nodoc:
-  @socket : TCPSocket|OpenSSL::SSL::Socket::Client?
+  @socket : TCPSocket|OpenSSL::SSL::Socket::Client
+
+  # property timeout : Float32 = Time::Span.new(nanoseconds: 300_000_000)
 
   getter next_index : UInt64 = 0_u64
   getter match_index : UInt64 = 0_u64
 
-  def self.new(
-      id : Int64,
-      address : String,
-      tls : OpenSSL::SSL::Context::Client? = nil
+  def self.handshake(
+      packet : RPC::Hello,
+      socket : TCPSocket|OpenSSL::SSL::Socket::Client
     )
+    spawn do
+      packet.to_io(socket, IO::ByteFormat::NetworkEndian)
+      socket.flush
+    end
 
-    host, port = address.split(':')
-    new host, port, port.to_i, tls
+    spawn do
+      result = RPC::Packet.new(socket, IO::ByteFormat::NetworkEndian)
+      if result.is_a?(RPC::Hello)
+    end
   end
 
+  # TODO: initialze peer with a socket created outside
+  #   i.e. if the socket connects, and a handshake is
+  #        negotiated, pass the socket as an argument
+  #        to the initializer along with the id parsed
+  #        from the packet
+  #        if the socket does not connect, then no peer
+  #        can be initialized, and then can't be added
+  #        to the server's peer list
   def initialize(@id, @address, @port, @tls = nil)
     @socket = nil
   end
 
-  def send(request : Raft::RPC::Packet)
-    request.to_io(socket, FM)
+  def send(packet : RPC::Packet)
+    packet.to_io(socket, IO::ByteFormat::NetworkEndian)
     socket.flush
   end
 
   def read(timeout : Float32?)
-    RPC::Packet.new(socket, NetworkFormat)
-  end
-
-  def read
-    packet = RPC::Packet.new(socket, NetworkFormat)
-    callback = yield(packet)
-    send(callback)
+    RPC::Packet.new(socket, IO::ByteFormat::NetworkEndian)
   end
 
   private def socket : TCPSocket|OpenSSL::SSL::Socket::Client
