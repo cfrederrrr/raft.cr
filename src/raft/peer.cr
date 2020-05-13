@@ -21,6 +21,7 @@ class Raft::Peer
     spawn do
       result = RPC::Packet.new(socket, IO::ByteFormat::NetworkEndian)
       if result.is_a?(RPC::Hello)
+      end
     end
   end
 
@@ -32,7 +33,7 @@ class Raft::Peer
   #        if the socket does not connect, then no peer
   #        can be initialized, and then can't be added
   #        to the server's peer list
-  def initialize(@id, @address, @port, @tls = nil)
+  def initialize(@id, @socket, @next_index, @match_index)
     @socket = nil
   end
 

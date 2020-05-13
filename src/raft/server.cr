@@ -3,14 +3,6 @@ require "openssl"
 require "./state-machine"
 require "./config"
 
-enum Raft::State
-  Stopped
-  Starting
-  Joined
-  Running
-  Leading
-end
-
 # Provides several functions:
 # - Orchestrates cluster membership via `Raft::Cluster` and service
 # provisions via `Raft::Service`
@@ -34,6 +26,16 @@ end
 # server = Raft::Server.new(config, Position.new)
 # ```
 class Raft::Server
+
+  # Indicates the state of the server and control some processes
+  enum State
+    Stopped
+    Starting
+    Joined
+    Running
+    Leading
+  end
+
   # ID is always a random int64
   getter id : Int64
 
@@ -61,7 +63,7 @@ class Raft::Server
   @log : Log = Log.new
 
   def initialize(@config, @fsm)
-    @listener = Listener.new(@config.cluster)
+    @cluster = Listener.new(@config.cluster)
     @service = Service.new(@config.service)
     @following = @id = Random.rand(Int64::Min..Int64::MAX)
     @peers = [] of Peer
@@ -102,7 +104,6 @@ class Raft::Server
 
   def leave_cluster : State
     stop_service
-
   end
 
   def start_service

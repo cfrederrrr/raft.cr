@@ -26,19 +26,14 @@ class Raft::RPC::Hello < Raft::RPC::Packet
   # This may be the same as `@id`
   getter following : Int64
 
-  def initialize(@id, @leaving = false)
+  def initialize(@id, @commit_index, @following)
   end
 
   def self.from_io(io : IO, fm : IO::ByteFormat)
     id = io.read_bytes(UInt32, fm)
-    leaving = io.read_bytes(UInt8, fm)
-    if leaving == RPC::ACK
-      new id, true
-    elsif leaving == RPC::NAK
-      new id, false
-    else
-      raise "unrecognized byte #{leaving.to_s(16)}"
-    end
+    commit_index = io.read_bytes(UInt64, fm)
+    following = io.read_bytes(Int64, fm)
+    new id, commit_index, following
   end
 
   def to_io(io : IO, fm : IO::ByteFormat)
@@ -51,4 +46,18 @@ end
 class Raft::RPC::GoodBye < Raft::RPC::Packet
   TNUM = -0x01_i16
   getter id : Int64
+
+  def initialize(@id)
+  end
+
+  def self.from_io(io : IO, fm : IO::ByteFormat)
+    id = io.read_bytes(UInt64, fm)
+    new id
+  end
+
+  def to_io(io : IO, fm : IO::ByteFormat)
+    Version.to_io(io, fm)
+    TNUM.to_io(io, fm)
+    @id.to_io(io, fm)
+  end
 end
