@@ -33,16 +33,16 @@ struct Raft::Version
   def initialize(@major, @minor, @patch)
   end
 
-  def self.from_io(io : IO, fm : IO::ByteFormat = IO::ByteFormat::NetworkEndian)
+  def self.from_io(io : IO, fm : IO::ByteFormat)
     major = UInt8.from_io(io, fm)
     minor = UInt8.from_io(io, fm)
     patch = Uint8.from_io(io, fm)
     new major, minor, patch
   end
 
-  # Used to indicate the version of an outgoing `Raft::RPC::Packet` and to determine the
-  # safety of parsing and handling of an incoming `Raft::RPC::Packet`
-  def self.to_io(io : IO, fm : IO::ByteFormat = IO::ByteFormat::NetworkEndian)
+  # Used to indicate the version of an outgoing `Raft::Packet` and to determine the
+  # safety of parsing and handling of an incoming `Raft::Packet`
+  def self.to_io(io : IO, fm : IO::ByteFormat)
     MAJOR.to_io(io, fm)
     MINOR.to_io(io, fm)
     PATCH.to_io(io, fm)

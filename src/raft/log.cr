@@ -12,7 +12,7 @@ class Raft::Log
   def initialize(@entries : Array(Entry))
   end
 
-  def self.from_io(io : IO::Buffered, fm : IO::ByteFormat = NetworkEndian)
+  def self.from_io(io : IO, fm : IO::ByteFormat)
     entries = [] of Entry
     while io.peek.any?
       typeid = io.read_bytes(Int32, fm)
@@ -21,11 +21,13 @@ class Raft::Log
       case typeid
         {% for t in Entry.all_subclasses %}
           {% typeid = t.constant(:TNUM) %}
-          {% if ! tnum.is_a?(NumberLiteral) || tnum > Int32::MAX || tnum < Int32::MIN %}
-            {% raise "#{t}::TNUM must be Int32" %}
+          {% if ! tnum.is_a?(NumberLiteral) %}
+            {% raise "#{t.id}::TNUM must be Int32" %}
+          {% elsif tnum > Int32::MAX || tnum < Int32::MIN %}
+            {% raise "#{t.id}::TNUM must be Int32"%}
           {% end %}
           {% if ids.keys.includes?(typeid) %}
-            {% raise "#{t.id}::TNUM (#{typeid}) cannot be the same as #{ids[typeid]}::TNUM" %}
+            {% raise "#{t.id} can't have the same TNUM as #{ids[typeid]}" %}
           {% else %}
             {% ids[typeid] = t %}
           {% end %}
