@@ -1,4 +1,4 @@
-class Raft::RPC::RequestVote < Raft::RPC::Packet
+class Raft::RPC::RequestVote < Raft::Packet
   #:nodoc:
   TNUM = 0xF9_i16
 
@@ -54,7 +54,7 @@ class Raft::RPC::RequestVote < Raft::RPC::Packet
   end
 end
 
-class Raft::RPC::RequestVoteResult < Raft::RPC::Packet
+class Raft::RPC::RequestVoteResult < Raft::Packet
   #:nodoc:
   TNUM = -0xF9_i16
 

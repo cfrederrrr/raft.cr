@@ -11,7 +11,7 @@
 # No other transaction can occur between servers until the handshake
 # is successful. Luckily, it is rather simple to complete, as it is
 # nothing more than sharing `Raft::Version` and `Raft::Server#id`
-class Raft::RPC::Hello < Raft::RPC::Packet
+class Raft::RPC::Hello < Raft::Packet
   #:nodoc:
   TNUM = 0x01_i16
 
@@ -43,7 +43,7 @@ class Raft::RPC::Hello < Raft::RPC::Packet
   end
 end
 
-class Raft::RPC::GoodBye < Raft::RPC::Packet
+class Raft::RPC::GoodBye < Raft::Packet
   TNUM = -0x01_i16
   getter id : Int64
 

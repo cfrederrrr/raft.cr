@@ -1,4 +1,4 @@
-class Raft::RPC::AppendEntries < Raft::RPC::Packet
+class Raft::RPC::AppendEntries < Raft::Packet
   #:nodoc:
   TNUM = 0xAE_i16
 
@@ -52,7 +52,7 @@ class Raft::RPC::AppendEntries < Raft::RPC::Packet
     to_io(io, FM)
   end
 
-  def to_io(io : IO, fm : IO::ByteFormat = PacketFormat)
+  def to_io(io : IO, fm : IO::ByteFormat)
     Version.to_io(io, fm)
     TNUM.to_io(io, fm)
     @term.to_io(io, fm)
@@ -68,18 +68,18 @@ class Raft::RPC::AppendEntries < Raft::RPC::Packet
   end
 end
 
-class Raft::RPC::AppendEntriesResult < Raft::RPC::Packet
+class Raft::RPC::AppendEntriesResult < Raft::Packet
   #:nodoc:
   TNUM = -0xAE_i16
 
   getter term : UInt32
   getter success : Bool
 
-  def self.new(io : IO, fm : IO::ByteFormat = PacketFormat)
+  def self.new(io : IO, fm : IO::ByteFormat)
     from_io(io, fm)
   end
 
-  def self.from_io(io : IO, fm : IO::ByteFormat = PacketFormat)
+  def self.from_io(io : IO, fm : IO::ByteFormat)
     term = io.read_bytes(UInt32, fm)
     success_val = io.read_bytes(UInt8, fm)
     success = success_val == ACK
@@ -89,7 +89,7 @@ class Raft::RPC::AppendEntriesResult < Raft::RPC::Packet
   def initialize(@term, @success)
   end
 
-  def to_io(io : IO, fm : IO::ByteFormat = PacketFormat)
+  def to_io(io : IO, fm : IO::ByteFormat)
     Raft::Version.to_io(io, fm)
     TNUM.to_io(io, fm)
     @term.to_io(io, fm)
