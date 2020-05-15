@@ -5,22 +5,20 @@ require "openssl"
 # complexities of establishing them as `Raft::Peer` objects
 # before returning them to the `Raft::Server`
 class Raft::Server::Listener
-
+  alias Transport = TCPServer|OpenSSL::SSL::Socket::Server
   # The transport object
-  @server : TCPServer|OpenSSL::SSL::Socket::Server
-  @context : OpenSSL::SSL::Context::Server
-  @queue : Array(RPC::Packet) = [] of RPC::Packet
+  @server : Transport
+  @context : OpenSSL::SSL::Context::Server?
+  @queue : Array(Packet) = [] of Packet
 
-  def initialize(addr : URI, @context : OpenSSL::SSL::Context::Server?)
-    socket = TCPSocket.new(addr.host, addr.port)
-    if context
-      @server = OpenSSL::SSL::Socket::Server.new(server, context)
-    else
-      @server = socket
-    end
+  def initialize(addr : URI, @context : OpenSSL::SSL::Context::Server? = nil)
+    @server = TCPServer.new(addr.host, addr.port)
+    @server = OpenSSL::SSL::Socket::Server.new(socket, context) if context
   end
 
   def listen
+  end
 
+  def stop
   end
 end

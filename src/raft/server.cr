@@ -34,7 +34,18 @@ class Raft::Server
     Joined
     Running
     Leading
+
+    def partiticipating?
+      self >= Joined
+    end
   end
+
+  delegate stopped?, to: @state
+  delegate starting?, to: @state
+  delegate joined?, to: @state
+  delegate partiticipating?, to: @state
+  delegate running?, to: @state
+  delegate leading?, to: @state
 
   # ID is always a random int64
   getter id : Int64
@@ -64,13 +75,13 @@ class Raft::Server
 
   def initialize(@config, @fsm)
     @cluster = Listener.new(@config.cluster)
-    @service = Service.new(@config.service)
+    @service = Listener.new(@config.service)
     @following = @id = Random.rand(Int64::Min..Int64::MAX)
     @peers = [] of Peer
     @state = State::Stopped
   end
 
-  def join_cluster : State
+  private def join_cluster
     # send handshake to known peers right away
     @peers.each do |peer|
       handshake = Hello.new(@id)
@@ -99,21 +110,26 @@ class Raft::Server
       end
     end
 
-    return State::Joined
+    @state = State::Joined
   end
 
-  def leave_cluster : State
+  private def leave_cluster : State
     stop_service
   end
 
-  def start_service
-    return State::Running
+  private def start_service
+    @state = State::Running
   end
 
-  def stop_service
+  private def stop_service
   end
 
-  def participate(with channel : Channel(Bool)) : Bool
+  private def lead
+    while leading?
+    end
+  end
+
+  private def participate(with channel : Channel(Bool)) : Bool
     spawn do
       while @state.running?
         @peers.each do |peer|
@@ -127,9 +143,19 @@ class Raft::Server
   end
 
   def launch
-    timeout_switch = Channel(Bool).new
+    channels = {
+      service: Channel(Packet).new,
+      cluster: Channel(Packet).new,
+      timeout: Channel(Bool).new
+    }
+
     @state = State::Starting
-    @state = join_cluster
+
+    # start listening for data from other servers before sending any out
+    @cluster.listen(with: channels[:cluster])
+    @state = join_cluster with: channels[:cluster]
+
+    @service.listen(with: channels[:service])
     @state = start_service
 
     if @state < State::Joined
@@ -139,7 +165,7 @@ class Raft::Server
 
     spawn do
       while participating?
-        partitipate(with: timeout_switch)
+        partitipate(with: channels[:timeout])
         timed_out = timeout_switch.receive
         if timed_out
           election = campaign
@@ -148,7 +174,7 @@ class Raft::Server
       end
     end
 
-    return @state
+    return channels
   end
 
   def replicate_entries
@@ -230,9 +256,5 @@ class Raft::Server
         # but that seems like we might never escape this method
       end
     end
-  end
-
-  def participating?
-    @state >= State::Joined
   end
 end

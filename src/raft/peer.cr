@@ -10,7 +10,7 @@ class Raft::Peer
   getter next_index : UInt64 = 0_u64
   getter match_index : UInt64 = 0_u64
 
-  def self.connect(packet : RPC::Hello, socket : Transport)
+  def self.handshake(packet : RPC::Hello, socket : Transport)
     # need to find out if there is data in the socket before proceeding
     # if there is data in the socket, do this part second
     # if there is no data in the socket
@@ -35,11 +35,18 @@ class Raft::Peer
   end
 
   def send(packet : RPC::Packet)
-    packet.to_io(@socket, IO::ByteFormat::NetworkEndian)
-    socket.flush
+    spawn do
+      packet.to_io(@socket, IO::ByteFormat::NetworkEndian)
+      socket.flush
+    end
   end
 
   def read(timeout : Float32?)
-    RPC::Packet.new(@socket, IO::ByteFormat::NetworkEndian)
+    packet : RPC::Packet
+    spawn do
+      packet = RPC::Packet.new(@socket, IO::ByteFormat::NetworkEndian)
+    end
+
+    return packet
   end
 end
