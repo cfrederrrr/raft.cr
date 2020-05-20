@@ -24,14 +24,14 @@ class Raft::Peer
       socket.flush
       result = RPC::Packet.new(socket, IO::ByteFormat::NetworkEndian)
       if result.is_a?(RPC::Hello)
-        return new result.id, result.next_index, result.match_index
+        return new socket, result.id, result.next_index, result.match_index
       else
         raise "bad response from peer - handshake failed"
       end
     end
   end
 
-  def initialize(@id, @socket, @next_index, @match_index)
+  def initialize(@socket, @id, @next_index, @match_index)
   end
 
   def send(packet : RPC::Packet)

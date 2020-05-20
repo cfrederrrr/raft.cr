@@ -1,0 +1,19 @@
+timeout: 300
+
+peers:
+  serverid1:
+    address: raft://192.168.1.2:4920
+  serverid2:
+    address: raft://192.168.1.3:4920
+  serverid3:
+    address: raft://192.168.1.4:4920
+
+cluster-addr: raft://192.168.1.1:4920
+service-addr: raft://192.168.1.1:4921
+
+tls:
+  cert: /home/raft/ssl/raft.crt
+  pkey: /home/raft/ssl/raft.key
+
+logfile: /var/log/raft.log
+statelog: /var/raft/log.bin

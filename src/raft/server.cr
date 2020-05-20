@@ -28,11 +28,11 @@ require "./config"
 class Raft::Server
 
   # Indicates the state of the server and control some processes
-  enum State
+  enum Status
     Stopped
     Starting
     Joined
-    Running
+    Following
     Leading
 
     def partiticipating?
@@ -40,12 +40,15 @@ class Raft::Server
     end
   end
 
-  delegate stopped?, to: @state
-  delegate starting?, to: @state
-  delegate joined?, to: @state
-  delegate partiticipating?, to: @state
-  delegate running?, to: @state
-  delegate leading?, to: @state
+  delegate stopped?, to: @membership
+  delegate starting?, to: @membership
+  delegate joined?, to: @membership
+  delegate partiticipating?, to: @membership
+  delegate running?, to: @membership
+
+  def leading?
+    @following == @id
+  end
 
   # ID is always a random int64
   getter id : Int64
@@ -66,7 +69,7 @@ class Raft::Server
 
   # Timeout is the time in milliseconds to wait for the leader before
   # initiating an election
-  @state : State
+  @membership : Status
 
   getter config : Config
 
@@ -74,11 +77,11 @@ class Raft::Server
   @log : Log = Log.new
 
   def initialize(@config, @fsm)
-    @cluster = Listener.new(@config.cluster)
-    @service = Listener.new(@config.service)
+    @cluster = Listener.new(@config.cluster, @config.tls)
+    @service = Listener.new(@config.service, @config.tls)
     @following = @id = Random.rand(Int64::Min..Int64::MAX)
     @peers = [] of Peer
-    @state = State::Stopped
+    @membership = Status::Stopped
   end
 
   private def join_cluster
@@ -95,10 +98,8 @@ class Raft::Server
     end
 
     @peers.each do |peer|
-      spawn do
-        handshake = Hello.new(@id)
-        result = peer.send handshake
-      end
+      handshake = Hello.new(@id)
+      result = peer.send handshake
     end
 
     @peers.each do |peer|
@@ -110,28 +111,44 @@ class Raft::Server
       end
     end
 
-    @state = State::Joined
+    @membership = Status::Joined
   end
 
-  private def leave_cluster : State
+  private def leave_cluster : Status
     stop_service
   end
 
   private def start_service
-    @state = State::Running
+    @membership = Status::Following
   end
 
   private def stop_service
   end
 
   private def lead
+    @status = Status::Leading
     while leading?
+      tick_finish = Time.local + @config.heartbeat
+      # check peer states and send missing entries
+      # or just send empty RPC::AppendEntries if peer state matches
+      # local state
+      replicate_entries
+
+      # to prevent excessive sending of heartbeats:
+      #   sleep for the remaining time of the "tick"
+      #   which is the start time plus the heartbeat minus the time spent
+      #   between the start time and now
+      sleep tick_finish - Time.local
     end
+
+    @status = Status::Following
   end
 
-  private def participate(with channel : Channel(Bool)) : Bool
+  private def follow(peer : Peer)
+    @following = peer.id
+
     spawn do
-      while @state.running?
+      while @membership.running?
         @peers.each do |peer|
           entries = @log.entries[peer.commit_index..@log.commit_index]
         end
@@ -142,34 +159,28 @@ class Raft::Server
     return true
   end
 
-  def launch
-    channels = {
-      service: Channel(Packet).new,
-      cluster: Channel(Packet).new,
-      timeout: Channel(Bool).new
-    }
-
-    @state = State::Starting
+  private def launch
+    @membership = Status::Starting
 
     # start listening for data from other servers before sending any out
-    @cluster.listen(with: channels[:cluster])
-    @state = join_cluster with: channels[:cluster]
+    @cluster.listen
+    @membership = join_cluster
 
-    @service.listen(with: channels[:service])
-    @state = start_service
+    @service.listen
+    @membership = start_service
 
-    if @state < State::Joined
-      @state = State::Stopped
-      return @state
+    if @membership < Status::Joined
+      @membership = Status::Stopped
+      return @membership
     end
 
     spawn do
       while participating?
-        partitipate(with: channels[:timeout])
+        partitipate
         timed_out = timeout_switch.receive
         if timed_out
           election = campaign
-          @state = State::LEADING if election.won?
+          @membership = Status::Leading if election.won?
         end
       end
     end
@@ -177,7 +188,39 @@ class Raft::Server
     return channels
   end
 
-  def replicate_entries
+  # Requests come in the form of `Packet`s.
+  # - UpdateState
+  # - GetState
+  # - StopServer
+  # - StartServer
+  # - responses to all of the above
+  def handle_requests
+    requests = [] of Packet
+
+    @service.connections.each do |socket|
+      request = Packet.new(socket, IO::ByteFormat::NetworkEndian)
+      requests.push(request)
+    end
+
+
+
+    return requests
+  end
+
+  def start
+    launch
+    while running?
+      handle_clients # handle clients should spawn a while loop that responds
+                     # to requesters (i.e. non-cluster members)
+                     # and maybe should only break if
+      leading? ? lead : follow
+    end
+  end
+
+  def stop
+  end
+
+  private def replicate_entries
     # static values for all packets
     current_term = @term
     leader_commit = @log.commit_idx
@@ -223,7 +266,7 @@ class Raft::Server
     end
   end
 
-  def campaign
+  private def campaign
     pkt = RPC::RequestVote.new(
       term:          @term,
       candidate_id:  @id,
