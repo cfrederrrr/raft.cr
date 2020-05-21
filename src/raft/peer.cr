@@ -24,7 +24,7 @@ class Raft::Peer
     spawn do
       packet.to_io(socket, IO::ByteFormat::NetworkEndian)
       socket.flush
-      result = RPC::Packet.new(socket, IO::ByteFormat::NetworkEndian)
+      result = Packet.new(socket, IO::ByteFormat::NetworkEndian)
       if result.is_a?(RPC::Hello)
         return new socket, result.id, result.next_index, result.match_index
       else
@@ -37,7 +37,7 @@ class Raft::Peer
     @unread = [] of Packet
   end
 
-  def send(packet : RPC::Packet)
+  def send(packet : Packet)
     spawn do
       packet.to_io(@socket, IO::ByteFormat::NetworkEndian)
       socket.flush
@@ -45,10 +45,6 @@ class Raft::Peer
   end
 
   def read(timeout : Float32?)
-    spawn do
-      @unread.push RPC::Packet.new(@socket, IO::ByteFormat::NetworkEndian)
-    end
-
-    return packet
+    Packet.new(@socket, IO::ByteFormat::NetworkEndian)
   end
 end

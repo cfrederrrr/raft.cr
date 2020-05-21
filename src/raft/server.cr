@@ -84,6 +84,48 @@ class Raft::Server
     @membership = Status::Stopped
   end
 
+  def start
+    launch
+    while running?
+      handle_clients # handle clients should spawn a while loop that responds
+                     # to requesters (i.e. non-cluster members)
+                     # and maybe should only break if
+      leading? ? lead_cluster : follow
+    end
+  end
+
+  def stop
+  end
+
+  private def launch
+    @membership = Status::Starting
+
+    # start listening for data from other servers before sending any out
+    @cluster.listen
+    @membership = join_cluster
+
+    @service.listen
+    @membership = start_service
+
+    if @membership < Status::Joined
+      @membership = Status::Stopped
+      return @membership
+    end
+
+    spawn do
+      while participating?
+        partitipate
+        timed_out = timeout_switch.receive
+        if timed_out
+          election = campaign
+          @membership = Status::Leading if election.won?
+        end
+      end
+    end
+
+    return channels
+  end
+
   private def join_cluster
     # send handshake to known peers right away
     @peers.each do |peer|
@@ -125,8 +167,8 @@ class Raft::Server
   private def stop_service
   end
 
-  private def lead
-    # lead always sends and receives from peers unlike follow
+  private def lead_cluster
+    # lead_cluster always sends and receives from peers unlike follow
     # follow still needs a way to check for packets from non-leaders
     # so that they can vote when another peer campaigns
     # or a `AppendEntries` in case the election is won before
@@ -172,33 +214,19 @@ class Raft::Server
     return true
   end
 
-  private def launch
-    @membership = Status::Starting
-
-    # start listening for data from other servers before sending any out
-    @cluster.listen
-    @membership = join_cluster
-
-    @service.listen
-    @membership = start_service
-
-    if @membership < Status::Joined
-      @membership = Status::Stopped
-      return @membership
-    end
-
-    spawn do
-      while participating?
-        partitipate
-        timed_out = timeout_switch.receive
-        if timed_out
-          election = campaign
-          @membership = Status::Leading if election.won?
+  private def participate
+    @peers.each do |peer|
+      spawn do
+        packet = peer.read
+        case packet
+        when RPC::RequestVote
+        when RPC::AppendEntries
+        else
+          peer.close
+          @peers.delete(peer)
         end
       end
     end
-
-    return channels
   end
 
   # Requests come in the form of `Packet`s.
@@ -207,7 +235,7 @@ class Raft::Server
   # - StopServer
   # - StartServer
   # - responses to all of the above
-  def handle_requests
+  private def handle_requests
     requests = [] of Packet
 
     @service.connections.each do |socket|
@@ -218,19 +246,6 @@ class Raft::Server
 
 
     return requests
-  end
-
-  def start
-    launch
-    while running?
-      handle_clients # handle clients should spawn a while loop that responds
-                     # to requesters (i.e. non-cluster members)
-                     # and maybe should only break if
-      leading? ? lead : follow
-    end
-  end
-
-  def stop
   end
 
   private def replicate_entries
