@@ -1,9 +1,11 @@
 class Raft::Peer
-  alias Transport = TCPSocket|OpenSSL::SSL::Socket::Client
+  alias Transport = TCPSocket|OpenSSL::SSL::Socket
   getter id : Int64
 
   # :nodoc:
   @socket : Transport
+
+  getter unread : Array(Packet)
 
   # property timeout : Float32 = Time::Span.new(nanoseconds: 300_000_000)
 
@@ -32,6 +34,7 @@ class Raft::Peer
   end
 
   def initialize(@socket, @id, @next_index, @match_index)
+    @unread = [] of Packet
   end
 
   def send(packet : RPC::Packet)
@@ -42,9 +45,8 @@ class Raft::Peer
   end
 
   def read(timeout : Float32?)
-    packet : RPC::Packet
     spawn do
-      packet = RPC::Packet.new(@socket, IO::ByteFormat::NetworkEndian)
+      @unread.push RPC::Packet.new(@socket, IO::ByteFormat::NetworkEndian)
     end
 
     return packet

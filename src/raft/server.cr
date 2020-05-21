@@ -126,6 +126,19 @@ class Raft::Server
   end
 
   private def lead
+    # lead always sends and receives from peers unlike follow
+    # follow still needs a way to check for packets from non-leaders
+    # so that they can vote when another peer campaigns
+    # or a `AppendEntries` in case the election is won before
+    # the RequestVote is received.
+    #
+    # that might just mean that, during follow mode, for all peers except the
+    # leader, we should just berunning `peer.read` with the expectation of a
+    # RequestVote i.e.
+    # `rv = RequestVote.new(peer, IO::ByteFormat::NetworkEndian)`
+    # and let the io simply wait on that packet indefinitely in a sleeping
+    # fiber
+
     @status = Status::Leading
     while leading?
       tick_finish = Time.local + @config.heartbeat
