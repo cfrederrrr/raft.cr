@@ -18,28 +18,35 @@ class Raft::RPC::Hello < Raft::Packet
   # TNUM of the server initiating the handshake
   getter id : Int64
 
+  # The current term
+  getter term : UInt64
+
   # The commit index of the server sending the packet
   getter commit_index : UInt64 = 0_u64
 
-  # The ID of the server that the sender is following
+  # The ID of the server that the sender is leader_id
   #
   # This may be the same as `@id`
-  getter following : Int64
+  getter leader_id : Int64
 
-  def initialize(@id, @commit_index, @following)
+  def initialize(@id, @leader_id, @term, @commit_index)
   end
 
   def self.from_io(io : IO, fm : IO::ByteFormat)
     id = io.read_bytes(UInt32, fm)
+    term = io.read_bytes(UInt64, fm)
     commit_index = io.read_bytes(UInt64, fm)
-    following = io.read_bytes(Int64, fm)
-    new id, commit_index, following
+    leader_id = io.read_bytes(Int64, fm)
+    new id, term, commit_index, leader_id
   end
 
   def to_io(io : IO, fm : IO::ByteFormat)
     Version.to_io(io, fm)
     TNUM.to_io(io, fm)
     @id.to_io(io, fm)
+    @term.to_io(io, fm)
+    @commit_index.to_io(io, fm)
+    @leader_id.to_io(io, fm)
   end
 end
 

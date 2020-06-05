@@ -47,7 +47,7 @@ class Raft::Server
   delegate running?, to: @membership
 
   def leading?
-    @following == @id
+    @leader_id == @id
   end
 
   # ID is always a random int64
@@ -64,8 +64,8 @@ class Raft::Server
   # Peers to this cluster
   getter peers : Array(Peer) = [] of Peer
 
-  # The peer this `Raft::Server` is following
-  getter following : Int64
+  # The id of the peer this `Raft::Server` is following
+  getter leader_id : Int64
 
   # Timeout is the time in milliseconds to wait for the leader before
   # initiating an election
@@ -79,7 +79,7 @@ class Raft::Server
   def initialize(@config, @fsm)
     @cluster = Listener.new(@config.cluster, @config.tls)
     @service = Listener.new(@config.service, @config.tls)
-    @following = @id = Random.rand(Int64::Min..Int64::MAX)
+    @leader_id = @id = Random.rand(Int64::Min..Int64::MAX)
     @peers = [] of Peer
     @membership = Status::Stopped
   end
@@ -87,14 +87,43 @@ class Raft::Server
   def start
     launch
     while running?
-      handle_clients # handle clients should spawn a while loop that responds
-                     # to requesters (i.e. non-cluster members)
-                     # and maybe should only break if
-      leading? ? lead_cluster : follow
+      if leading? spawn lead_cluster
+      if following? spawn follow_leader
+
+      if leading?
+        @peers.each do |peer|
+          entries = @log[peer.match_index..@log.commit_index]
+          # i think prev_log_idx and prev_log_term refer to
+          # the difference between current log number
+          # and how many entries have been added since last
+          packet = RPC::AppendEntries.new(
+            term: @term,
+            leader_id: @id,
+            leader_commit: @log.commit_index,
+            prev_log_idx: @log.prev_log_idx,
+            prev_log_term: @log.prev_log_term,
+            entries: entries
+          )
+          peer.send packet
+        end
+
+        @peers.each do |peer|
+          result = peer.read # check for OK from peer
+        end
+      else
+      end
+
     end
   end
 
   def stop
+  end
+
+  @[AlwaysInline]
+  private def tick
+    start = Time.local + @config.heartbeat
+    yield
+    sleep start - Time.local
   end
 
   private def launch
@@ -107,50 +136,38 @@ class Raft::Server
     @service.listen
     @membership = start_service
 
-    if @membership < Status::Joined
-      @membership = Status::Stopped
-      return @membership
-    end
-
-    spawn do
-      while participating?
-        partitipate
-        timed_out = timeout_switch.receive
-        if timed_out
-          election = campaign
-          @membership = Status::Leading if election.won?
-        end
-      end
-    end
-
-    return channels
+    @membership = Status::Stopped if @membership < Status::Joined
+    return @membership
   end
 
   private def join_cluster
+    peers = [] of Peer
     # send handshake to known peers right away
     @peers.each do |peer|
-      handshake = Hello.new(@id)
-      peer.send(handshake)
+      hello = Hello.new(@id)
+      peer.send(hello)
     end
 
     # then check config for other expected peers
     @config.peers.each do |addr|
-      peer = Peer.new(addr, @config.tls)
-      @peers.push(peer) if result.ok?
+      hello = Hello.new(@id, @term, @log.commit_index, @id)
+      peer = Peer.handshake(hello)
+      peers.push Peer.handshake(hello)
     end
 
-    @peers.each do |peer|
-      handshake = Hello.new(@id)
-      result = peer.send handshake
-    end
-
-    @peers.each do |peer|
+    blocker = Channel(Hello?).new
+    peers.each do |peer|
       spawn do
         result = peer.read(@config.heartbeat * 2)
         if result.is_a?(Hello)
+          @peers.push(peer)
         else
         end
       end
+    end
+
+    peers.size.times do |t|
+
     end
 
     @membership = Status::Joined
@@ -162,6 +179,13 @@ class Raft::Server
 
   private def start_service
     @membership = Status::Following
+    while running?
+      spawn do
+        @service.connections.each do |conn|
+          # read requests and add them to processing queue
+        end
+      end
+    end
   end
 
   private def stop_service
@@ -187,6 +211,12 @@ class Raft::Server
       # check peer states and send missing entries
       # or just send empty RPC::AppendEntries if peer state matches
       # local state
+
+      #
+      # - collect entries from service clients
+      # - replicate the entries to peers
+      # -
+
       replicate_entries
 
       # to prevent excessive sending of heartbeats:
@@ -200,7 +230,7 @@ class Raft::Server
   end
 
   private def follow(peer : Peer)
-    @following = peer.id
+    @leader_id = peer.id
 
     spawn do
       while @membership.running?
@@ -239,7 +269,7 @@ class Raft::Server
     requests = [] of Packet
 
     @service.connections.each do |socket|
-      request = Packet.new(socket, IO::ByteFormat::NetworkEndian)
+      request = Packet.from_io(socket, IO::ByteFormat::NetworkEndian)
       requests.push(request)
     end
 
@@ -295,37 +325,29 @@ class Raft::Server
   end
 
   private def campaign
-    pkt = RPC::RequestVote.new(
+    packet = RPC::RequestVote.new(
       term:          @term,
       candidate_id:  @id,
       last_log_idx:  @log.last_log_idx,
       last_log_term: @log.last_log_term
     )
 
-    # don't block on sends
-    @peers.each do |peer|
-      spawn do
-        # again, might be wise to clear whatever's in the buffer
-        peer.send(pkt)
-      end
-    end
+    @peers.each &.send(packet)
 
-    # don't block on reads either
+    ballot_box = Channel(Packet?).new
     @peers.each do |peer|
-      spawn do
-        result = peer.read
+      result = peer.read
 
-        # handle the result types
-        #
-        # if the incoming type is anything other than Raft::RPC::RequestVoteResult
-        # we should probably just throw it away, since the only other possibility
-        # should be Raft::RPC::AppendEntries, at which time we have lost the campaign
-        # and should just wait for the leader to send another one.
-        #
-        # it may be possible to optimise later to enable #campaign to respond to the
-        # Raft::RPC::AppendEntries, then check again for a vote result
-        # but that seems like we might never escape this method
-      end
+      # handle the result types
+      #
+      # if the incoming type is anything other than Raft::RPC::RequestVoteResult
+      # we should probably just throw it away, since the only other possibility
+      # should be Raft::RPC::AppendEntries, at which time we have lost the campaign
+      # and should just wait for the leader to send another one.
+      #
+      # it may be possible to optimise later to enable #campaign to respond to the
+      # Raft::RPC::AppendEntries, then check again for a vote result
+      # but that seems like we might never escape this method
     end
   end
 end

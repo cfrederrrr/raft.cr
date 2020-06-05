@@ -164,7 +164,7 @@ class Raft::Server
     # a peer responds with an `AppendEntries`, rather than a `RequestVote::Result`
     until votes >= quorum
       @peers.each do |id, peer|
-        response = RPC::Packet.new(socket, NetworkFormat)
+        response = RPC::Packet.from_io(socket, NetworkFormat)
         case response
         when RPC::RequestVote::Result
           votes += 1 if response.vote_granted
