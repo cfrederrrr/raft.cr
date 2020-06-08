@@ -1,12 +1,23 @@
 class Raft::RPC::AppendEntries < Raft::Packet
-  #:nodoc:
+  # :nodoc:
   TNUM = 0xAE_i16
 
+  # The term of the sender
   getter term : UInt32
+
+  # The id of the leader, supplied so followers can redirect clients
   getter leader_id : Int64
+
+  # The commit index of the leader's log
   getter leader_commit : UInt32
+
+  # The index of the log entry immediately preceding the entries being supplied
   getter prev_log_idx : UInt32
+
+  # 
   getter prev_log_term : UInt32
+
+  #
   getter entries : Array(Log::Entry)
 
   def self.new(io : IO, fm : IO::ByteFormat)
@@ -72,7 +83,10 @@ class Raft::RPC::AppendEntriesResult < Raft::Packet
   #:nodoc:
   TNUM = -0xAE_i16
 
+  #
   getter term : UInt32
+
+  #
   getter success : Bool
 
   def self.new(io : IO, fm : IO::ByteFormat)

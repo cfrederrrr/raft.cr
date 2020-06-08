@@ -32,9 +32,7 @@ class Raft::Server::Listener
   def listen : Bool
     while listening?
       socket = @server.accept?
-      if socket
-        connections.push(socket) if socket
-      end
+      connections.push(socket) if socket
     end
   end
 

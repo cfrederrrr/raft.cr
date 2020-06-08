@@ -50,10 +50,18 @@ class Raft::Server
     @leader_id == @id
   end
 
+  getter config : Config
+
+  @state_machine : StateMachine
+
   # ID is always a random int64
   getter id : Int64
 
-  getter term : UInt64 = 0_u64
+  @log : Log = Log.new
+
+  @voted_for : Int64?
+
+  @membership : Status
 
   # The address peers will use to connect to this server
   @cluster : Listener
@@ -67,16 +75,7 @@ class Raft::Server
   # The id of the peer this `Raft::Server` is following
   getter leader_id : Int64
 
-  # Timeout is the time in milliseconds to wait for the leader before
-  # initiating an election
-  @membership : Status
-
-  getter config : Config
-
-  @fsm : StateMachine
-  @log : Log = Log.new
-
-  def initialize(@config, @fsm)
+  def initialize(@config, @state_machine)
     @cluster = Listener.new(@config.cluster, @config.tls)
     @service = Listener.new(@config.service, @config.tls)
     @leader_id = @id = Random.rand(Int64::Min..Int64::MAX)
@@ -273,11 +272,10 @@ class Raft::Server
       requests.push(request)
     end
 
-
-
     return requests
   end
 
+  # Enables `Raft::Server` leading its cluster to send entries to followers
   private def replicate_entries
     # static values for all packets
     current_term = @term
@@ -324,6 +322,48 @@ class Raft::Server
     end
   end
 
+  def update_state(entries : Array(Log::Entry)) : Int32
+    entries_applied = 0
+
+    entries.each.with_index do |entry, index|
+      begin
+        @state_machine.update(entry)
+        @term = entry.term
+        entries_applied += 1
+      rescue
+        return entries_applied
+      end
+    end
+
+    return entries_applied
+  end
+
+  # Enables `Raft::Server` following a peer to receive entries and apply them
+  # to the log
+  private def append_entries(packet : RPC::AppendEntries) : RPC::AppendEntriesResult
+    # be sure to update term and reset `@voted_for` to null if packet.term > @term
+    return RPC::AppendEntriesResult.new(@term, false) if (
+      packet.term < @term ||
+      packet.prev_log_idx < @log.commit_index
+    )
+
+    # this may be an opportunity for optimization later. maybe rather than appending
+    # them one by one we should apply the whole thing to the log, if possible
+    # then apply the updates to the state machine if the log updates successfully (or
+    # as many as were correctly applied to the log), thus saving some overhead on
+    # method calls
+    packet.entries.each do |entry|
+      @log.append(entry)
+      @state_machine.update(entry)
+    end
+
+  end
+
+  # Sends a `RequestVote` to each of the peers and awaits a quorum
+  #
+  # Quorum can be defined in one of two ways.
+  # 1. Explicitly in the configuration (`@config`)
+  # 2. Implicitly by calculating the number of peers at the start of the `campaign`
   private def campaign
     packet = RPC::RequestVote.new(
       term:          @term,
@@ -349,5 +389,17 @@ class Raft::Server
       # Raft::RPC::AppendEntries, then check again for a vote result
       # but that seems like we might never escape this method
     end
+  end
+
+  private def cast_vote(candidate : RPC::RequestVote) : RPC::RequestVoteResult
+    granted = (
+      candidate.term > @term &&
+      candidate.last_log_idx >= @last_log_idx &&
+      candidate.last_log_term >= @last_log_term
+    )
+
+    @voted_for = candidate.id if granted
+
+    return RPC::RequestVoteResult.new(@term, granted)
   end
 end
