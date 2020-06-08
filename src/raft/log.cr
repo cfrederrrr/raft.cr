@@ -38,8 +38,12 @@ class Raft::Log
     @term = @entries.empty? ? 0_u64 : @entries.last.term
   end
 
+  # Applies an entry to `@entries` and updates `@term` to match
+  # that of the entry
   def append(entry : Entry)
-
+    return false unless @term <= entry.term
+    @entries.push entry
+    @term = entry.term
   end
 
   def to_io(io : IO, fm : IO::ByteFormat)
@@ -48,6 +52,34 @@ class Raft::Log
     end
   end
 
+  # it may make more sense to simply include Enumerable(Entry)
+  # and delegate #each to @entries
+  #
+  # also, at some point, we will need to make log be able to dump
+  # entries to disk or wherever and shrink the size of the array
+  # to keep memory usage reasonable.  this will almost definitely mean
+  # that `Entry` will have to include an index as well so that they can
+  # be read (either back into the array, or not) from disk as well
+  #
+  # unfortunately, this means keeping two UInt64 with every entry... :(
+  # maybe there is some magic to be done with smaller UInts on older entries
+  # or perhaps some way of only writing the term if there is a change to the term
+  #
+  # there may also be a trick available if we write the term after the update
+  # contents instead of before, but that could get difficult as users come up with
+  # complex update objects since we also don't want to have to rewrite the entire
+  # state machine for every log entry, which makes updates variable in length
+  #
+  # for a first-pass, this will have to suffice
+
+  def select(min_term : UInt64)
+    selection = [] of Entry
+    index = -1
+    entry = @entries[index]
+    while min_term >= entry.term
+      index -= 1
+    end
+  end
 end
 
 class Raft::Log::Entry
