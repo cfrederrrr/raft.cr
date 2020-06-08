@@ -96,7 +96,7 @@ class Raft::Server
           # the difference between current log number
           # and how many entries have been added since last
           packet = RPC::AppendEntries.new(
-            term: @term,
+            term: @log.term,
             leader_id: @id,
             leader_commit: @log.commit_index,
             prev_log_idx: @log.prev_log_idx,
@@ -149,7 +149,7 @@ class Raft::Server
 
     # then check config for other expected peers
     @config.peers.each do |addr|
-      hello = Hello.new(@id, @term, @log.commit_index, @id)
+      hello = Hello.new(@id, @log.term, @log.commit_index, @id)
       peer = Peer.handshake(hello)
       peers.push Peer.handshake(hello)
     end
@@ -278,7 +278,7 @@ class Raft::Server
   # Enables `Raft::Server` leading its cluster to send entries to followers
   private def replicate_entries
     # static values for all packets
-    current_term = @term
+    current_term = @log.term
     leader_commit = @log.commit_idx
     prev_log_idx = @log.prev_log_idx
     prev_log_term = @log.prev_log_term
@@ -328,7 +328,7 @@ class Raft::Server
     entries.each.with_index do |entry, index|
       begin
         @state_machine.update(entry)
-        @term = entry.term
+        @log.term = entry.term
         entries_applied += 1
       rescue
         return entries_applied
@@ -341,9 +341,9 @@ class Raft::Server
   # Enables `Raft::Server` following a peer to receive entries and apply them
   # to the log
   private def append_entries(packet : RPC::AppendEntries) : RPC::AppendEntriesResult
-    # be sure to update term and reset `@voted_for` to null if packet.term > @term
-    return RPC::AppendEntriesResult.new(@term, false) if (
-      packet.term < @term ||
+    # be sure to update term and reset `@voted_for` to null if packet.term > @log.term
+    return RPC::AppendEntriesResult.new(@log.term, false) if (
+      packet.term < @log.term ||
       packet.prev_log_idx < @log.commit_index
     )
 
@@ -353,8 +353,11 @@ class Raft::Server
     # as many as were correctly applied to the log), thus saving some overhead on
     # method calls
     packet.entries.each do |entry|
-      @log.append(entry)
-      @state_machine.update(entry)
+      log_updated = @log.append(entry)
+      sm_updated = @state_machine.update(entry) if log_updated
+      if !sm_updated
+        return RPC::AppendEntriesResult.new(@log.term, false)
+      end
     end
 
   end
@@ -366,7 +369,7 @@ class Raft::Server
   # 2. Implicitly by calculating the number of peers at the start of the `campaign`
   private def campaign
     packet = RPC::RequestVote.new(
-      term:          @term,
+      term:          @log.term,
       candidate_id:  @id,
       last_log_idx:  @log.last_log_idx,
       last_log_term: @log.last_log_term
@@ -393,13 +396,13 @@ class Raft::Server
 
   private def cast_vote(candidate : RPC::RequestVote) : RPC::RequestVoteResult
     granted = (
-      candidate.term > @term &&
+      candidate.term > @log.term &&
       candidate.last_log_idx >= @last_log_idx &&
       candidate.last_log_term >= @last_log_term
     )
 
     @voted_for = candidate.id if granted
 
-    return RPC::RequestVoteResult.new(@term, granted)
+    return RPC::RequestVoteResult.new(@log.term, granted)
   end
 end
