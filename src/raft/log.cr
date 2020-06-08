@@ -73,12 +73,15 @@ class Raft::Log
   # for a first-pass, this will have to suffice
 
   def select(min_term : UInt64)
-    selection = [] of Entry
     index = -1
     entry = @entries[index]
+    
     while min_term >= entry.term
       index -= 1
+      entry = @entries[index]
     end
+
+    return @entries[index...@entries.size]
   end
 end
 
