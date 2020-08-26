@@ -1,4 +1,9 @@
+require "./packet"
+require "./binary"
+
 class Raft::RPC::AppendEntries < Raft::Packet
+  include Binary
+
   # :nodoc:
   TNUM = 0xAE_i16
 
@@ -14,7 +19,7 @@ class Raft::RPC::AppendEntries < Raft::Packet
   # The index of the log entry immediately preceding the entries being supplied
   getter prev_log_idx : UInt32
 
-  # 
+  #
   getter prev_log_term : UInt32
 
   #

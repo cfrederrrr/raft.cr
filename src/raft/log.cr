@@ -2,7 +2,7 @@
 class Raft::Log
   getter commit_index : UInt64 = 0_u64
 
-  getter term : UInt64 = 0_u64
+  property term : UInt64 = 0_u64
 
   @entries : Array(Entry) = [] of Entry
 
@@ -13,7 +13,7 @@ class Raft::Log
       {% begin %}
         {% ids = {} of Nil => Nil %}
       case typeid
-        {% for t in Entry.all_subclasses %}
+        {% for t in Update.all_subclasses %}
           {% typeid = t.constant(:TNUM) %}
           {% if ! tnum.is_a?(NumberLiteral) %}
             {% raise "#{t.id}::TNUM must be Int32" %}
@@ -40,10 +40,11 @@ class Raft::Log
 
   # Applies an entry to `@entries` and updates `@term` to match
   # that of the entry
-  def append(entry : Entry)
+  def append(entry : Entry) : Bool
     return false unless @term <= entry.term
     @entries.push entry
     @term = entry.term
+    return true
   end
 
   def to_io(io : IO, fm : IO::ByteFormat)
@@ -75,7 +76,7 @@ class Raft::Log
   def select(min_term : UInt64)
     index = -1
     entry = @entries[index]
-    
+
     while min_term >= entry.term
       index -= 1
       entry = @entries[index]
@@ -90,7 +91,7 @@ class Raft::Log::Entry
   getter term : UInt64
 
   # The actual contents used to update `Raft::Server`'s `@fsm`
-  getter update : Update
+  getter update : StateMachine::Update
 
   def self.from_io(io : IO, fm : IO::ByteFormat)
     term = io.read_bytes(UInt64, fm)
@@ -104,22 +105,5 @@ class Raft::Log::Entry
   def to_io(io : IO, fm : IO::ByteFormat)
     @term.to_io(io, fm)
     @update.to_io(io, fm)
-  end
-end
-
-# `TNUM` must be defined and it must be `Int32`
-abstract class Raft::Log::Update
-  abstract def iobody(io : IO, fm : IO::ByteFormat)
-  abstract def from_io(io : IO, fm : IO::ByteFormat)
-
-  macro inherited
-    def self.from_io(io : IO, fm : IO::ByteFormat)
-      from_io(io, fm)
-    end
-
-    def to_io(io : IO, fm : IO::ByteFormat)
-      {{@type}}::TNUM.to_io(io, fm)
-      iobody(io, fm)
-    end
   end
 end

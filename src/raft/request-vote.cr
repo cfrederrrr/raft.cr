@@ -1,4 +1,6 @@
-class Raft::RPC::RequestVote < Raft::Packet
+require "./binary"
+
+class Raft::RequestVote < Raft::Packet
   #:nodoc:
   TNUM = 0xF9_i16
 
@@ -54,7 +56,8 @@ class Raft::RPC::RequestVote < Raft::Packet
   end
 end
 
-class Raft::RPC::RequestVoteResult < Raft::Packet
+# Response to `Raft::RPC::RequestVote`
+class Raft::RPC::Ballot < Raft::Packet
   #:nodoc:
   TNUM = -0xF9_i16
 

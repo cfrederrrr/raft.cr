@@ -1,14 +1,20 @@
 require "socket"
 require "openssl"
-require "./state-machine"
+
+require "./log"
 require "./config"
+require "./state-machine"
+require "./peer"
+
+private alias TLS = OpenSSL::SSL
+private alias NetworkFormat = IO::ByteFormat::NetworkEndian
 
 # Provides several functions:
 # - Orchestrates cluster membership via `Raft::Cluster` and service
 # provisions via `Raft::Service`
 # - Contains the consensus module
-# (see [Figure 1](https://raft.github.io/raft.pdf)
-# )
+# (see [Figure 1](https://raft.github.io/raft.pdf))
+#
 # - Contains and maintains the `Raft::StateMachine`
 #
 # ### Example:
@@ -26,69 +32,43 @@ require "./config"
 # server = Raft::Server.new(config, Position.new)
 # ```
 class Raft::Server
+  @config        : Config
+  @state_machine : StateMachine
+  @id            : Int64
+  @log           : Log = Log.new
+  @voted_for     : Int64?
+  @cluster       : Listener
+  @service       : Listener
+  @peers         : Hash(Int64, Peer) = {} of Int64=>Peer
+  @leader_id     : Int64
 
-  # Indicates the state of the server and control some processes
-  enum Status
+  # Indicates the level of presence of the server - see `Presence`
+  getter presence : Presence
+
+  enum Presence
     Stopped
     Starting
     Joined
     Following
     Leading
-
-    def partiticipating?
-      self >= Joined
-    end
   end
-
-  delegate stopped?, to: @membership
-  delegate starting?, to: @membership
-  delegate joined?, to: @membership
-  delegate partiticipating?, to: @membership
-  delegate running?, to: @membership
 
   def leading?
+    @peers.size > 0 &&
     @leader_id == @id
   end
-
-  getter config : Config
-
-  @state_machine : StateMachine
-
-  # ID is always a random int64
-  getter id : Int64
-
-  @log : Log = Log.new
-
-  @voted_for : Int64?
-
-  @membership : Status
-
-  # The address peers will use to connect to this server
-  @cluster : Listener
-
-  # The address clients will use to access the service
-  @service : Listener
-
-  # Peers to this cluster
-  getter peers : Array(Peer) = [] of Peer
-
-  # The id of the peer this `Raft::Server` is following
-  getter leader_id : Int64
 
   def initialize(@config, @state_machine)
     @cluster = Listener.new(@config.cluster, @config.tls)
     @service = Listener.new(@config.service, @config.tls)
     @leader_id = @id = Random.rand(Int64::Min..Int64::MAX)
-    @peers = [] of Peer
-    @membership = Status::Stopped
+    @peers = {} of Int64=>Peer
+    @presence = Presence::Stopped
   end
 
   def start
     launch
-    while running?
-      if leading? spawn lead_cluster
-      if following? spawn follow_leader
-
+    while @presence.running?
       if leading?
         @peers.each do |peer|
           entries = @log[peer.match_index..@log.commit_index]
@@ -118,31 +98,24 @@ class Raft::Server
   def stop
   end
 
-  @[AlwaysInline]
-  private def tick
-    start = Time.local + @config.heartbeat
-    yield
-    sleep start - Time.local
-  end
-
   private def launch
-    @membership = Status::Starting
+    @presence = Presence::Starting
 
     # start listening for data from other servers before sending any out
     @cluster.listen
-    @membership = join_cluster
+    @presence = join_cluster
 
     @service.listen
-    @membership = start_service
+    @presence = start_service
 
-    @membership = Status::Stopped if @membership < Status::Joined
-    return @membership
+    @presence = Presence::Stopped if @presence < Presence::Joined
+    return @presence
   end
 
   private def join_cluster
-    peers = [] of Peer
+    peers = {} of Int64=>Peer
     # send handshake to known peers right away
-    @peers.each do |peer|
+    @peers.each do |id, peer|
       hello = Hello.new(@id)
       peer.send(hello)
     end
@@ -159,7 +132,7 @@ class Raft::Server
       spawn do
         result = peer.read(@config.heartbeat * 2)
         if result.is_a?(Hello)
-          @peers.push(peer)
+          @peers[result.id] = peer
         else
         end
       end
@@ -169,15 +142,54 @@ class Raft::Server
 
     end
 
-    @membership = Status::Joined
+    @presence = Presence::Joined
   end
 
-  private def leave_cluster : Status
+  # Receiver implementation of handshake protocol
+  private def handshake(packet : Handshake)
+    peer = Peer.new(socket, result.id, result.next_index, result.match_index)
+    # TODO: probably should check if the id is already occupied and the connection is open
+    # could be an impersonator
+    @peers[result.id] = peer
+  end
+
+  # Sender implementation of handshake protocol
+  private def init_handshake(address : URI)
+    socket = TCPSocket.new(address.host, address.port)
+    socket.read_timeout = @config.heartbeat
+    socket.write_timeout = @config.heartbeat
+
+    if @config.tls
+      ctx = TLS::Context::Client.new(@config.cafile)
+      socket = TLS::Socket::Client.new(socket, ctx, true, address.host)
+    end
+
+    spawn do
+      packet = Handshake::Hello.new(@id, @leader_id, @term, @log.commit_index)
+      begin
+        packet.to_io(socket, NetworkFormat)
+        socket.flush
+        result = Packet.from_io(socket, NetworkFormat)
+        if result.is_a?(Handshake::Hello)
+          handshake(result)
+        else
+          return
+        end
+      rescue
+        # any kind of error simply means the handshake fails and we do not
+        # get to add the peer to the list of peers. no reason to stop
+        # the rest of the program though, so just move on and try again later
+        return
+      end
+    end
+  end
+
+  private def leave_cluster : Presence
     stop_service
   end
 
   private def start_service
-    @membership = Status::Following
+    @presence = Presence::Following
     while running?
       spawn do
         @service.connections.each do |conn|
@@ -204,7 +216,7 @@ class Raft::Server
     # and let the io simply wait on that packet indefinitely in a sleeping
     # fiber
 
-    @status = Status::Leading
+    @presence = Presence::Leading
     while leading?
       tick_finish = Time.local + @config.heartbeat
       # check peer states and send missing entries
@@ -225,14 +237,14 @@ class Raft::Server
       sleep tick_finish - Time.local
     end
 
-    @status = Status::Following
+    @presence = Presence::Following
   end
 
   private def follow(peer : Peer)
     @leader_id = peer.id
 
     spawn do
-      while @membership.running?
+      while @presence.running?
         @peers.each do |peer|
           entries = @log.entries[peer.commit_index..@log.commit_index]
         end
@@ -268,7 +280,7 @@ class Raft::Server
     requests = [] of Packet
 
     @service.connections.each do |socket|
-      request = Packet.from_io(socket, IO::ByteFormat::NetworkEndian)
+      request = Packet.from_io(socket, NetworkFormat)
       requests.push(request)
     end
 
@@ -277,34 +289,16 @@ class Raft::Server
 
   # Enables `Raft::Server` leading its cluster to send entries to followers
   private def replicate_entries
-    # static values for all packets
-    current_term = @log.term
-    leader_commit = @log.commit_idx
-    prev_log_idx = @log.prev_log_idx
-    prev_log_term = @log.prev_log_term
+    pconf = {
+      term:          @log.term,
+      leader_id:     @id,
+      leader_commit: @log.commit_idx,
+      prev_log_idx:  @log.prev_log_idx,
+      prev_log_term: @log.prev_log_term,
+      entries:       entries
+    }
 
-    @peers.each do |peer|
-      # don't block on sends
-      spawn do
-        entries = @log[peer.commit_index..@log.commit_index]
-        # find out the difference between this peer's log
-        # and our log, then add them to `entries`
-
-        pkt = RPC::AppendEntries.new(
-          term:          current_term,
-          leader_id:     @id,
-          leader_commit: leader_commit,
-          prev_log_idx:  prev_log_idx,
-          prev_log_term: prev_log_term,
-          entries:       entries
-        )
-
-        # might be wise to clear whatever is possibly
-        # in the buffer here, but that might be something to handle
-        # within Raft::Peer#send instead
-        peer.send(pkt)
-      end
-    end
+    @peers.each &.send(RPC::AppendEntries.new(**pconf))
 
     # don't block on reads either
     @peers.each do |peer|
@@ -368,14 +362,14 @@ class Raft::Server
   # 1. Explicitly in the configuration (`@config`)
   # 2. Implicitly by calculating the number of peers at the start of the `campaign`
   private def campaign
-    packet = RPC::RequestVote.new(
-      term:          @log.term,
-      candidate_id:  @id,
-      last_log_idx:  @log.last_log_idx,
-      last_log_term: @log.last_log_term
-    )
+    pconf = {
+      term: @log.term,
+      candidate_id: @id,
+      last_log_idx: @log.last_log_idx,
+      last_log_terM: @log.last_log_term
+    }
 
-    @peers.each &.send(packet)
+    @peers.each &.send(RPC::RequestVote.new(**pconf))
 
     ballot_box = Channel(Packet?).new
     @peers.each do |peer|
@@ -383,7 +377,7 @@ class Raft::Server
 
       # handle the result types
       #
-      # if the incoming type is anything other than Raft::RPC::RequestVoteResult
+      # if the incoming type is anything other than Raft::RPC::Ballot
       # we should probably just throw it away, since the only other possibility
       # should be Raft::RPC::AppendEntries, at which time we have lost the campaign
       # and should just wait for the leader to send another one.
@@ -394,15 +388,18 @@ class Raft::Server
     end
   end
 
-  private def cast_vote(candidate : RPC::RequestVote) : RPC::RequestVoteResult
-    granted = (
-      candidate.term > @log.term &&
-      candidate.last_log_idx >= @last_log_idx &&
-      candidate.last_log_term >= @last_log_term
-    )
+  private def cast_vote(candidate : RPC::RequestVote) : RPC::Ballot
+    return RPC::Ballot.new(@log.term, false) if candidate.term < @log.term
 
-    @voted_for = candidate.id if granted
+    granted = false
 
-    return RPC::RequestVoteResult.new(@log.term, granted)
+    if @voted_for.nil? || @voted_for == candidate.id
+      granted = begin
+        candidate.last_log_term >= @log.term &&
+        candidate.last_log_idx >= @log.commit_index
+      end
+    end
+
+    return RPC::Ballot.new(@log.term, granted)
   end
 end

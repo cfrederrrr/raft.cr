@@ -22,21 +22,30 @@ require "openssl"
 struct Raft::Config
   alias Raw = Hash(String, String | Int32 | Hash(String, String | Int32))
 
-  getter cluster : Cluster
-  getter service : Service
+  getter cluster : ::Raft::Config::Cluster
+  getter service : ::Raft::Config::Service
   getter heartbeat : Time::Span
   getter tls : OpenSSL::SSL::Context::Server?
+  getter peers : Array(::Raft::Config::Peer)
 
   def self.new(general : Raw, cluster : Raw, service : Raw)
     s_uri = URI.parse(s_addr)
     s_uri = URI.parse("raft://" + s_addr) if s_addr == s_uri.path
     s_uri.port = 4920 if (s_uri.port.nil? && s_uri.scheme == "raft")
     service_adder = Socket::IPAddress.new(s_uri.host, s_uri.port)
-    cluster = Cluster.new
+    cluster = ::Raft::Config::Cluster.new
     new cluster, service, heartbeat, tls
   end
 
   def initialize(@cluster, @service, @heartbeat, @tls)
+  end
+end
+
+struct Raft::Config::Peer
+  getter address : URI
+  getter heartbeat : Time::Span
+
+  def initialize(@address, @heartbeat)
   end
 end
 
@@ -57,10 +66,10 @@ struct Raft::Config::Service
 end
 
 struct Raft::Config::Cluster
-  address : URI
-  certfile : String?
-  pkeyfile : String?
-  heartbeat : Time::Span
+  getter address : URI
+  getter certfile : String?
+  getter pkeyfile : String?
+  getter heartbeat : Time::Span
 
   def self.new(addr : String, cert : String?, pkey : String?, hbeat : Int)
     uri = URI.parse(p_addr)
@@ -88,8 +97,12 @@ def Raft::Config.from_{{lang.id}}(data : String)
   heartbeat = general["heartbeat"]
   tls = conf["tls"]? || general["tls"]?
   {% if lang == "ini" %}
+  # the "defined_sections" are what they sound like - sections that include
+  # known data. non-defined sections are all regarded as peers. the section name
+  # will be the initialized @id of the peer, but may change as the peer
+  # responds
   defined_sections = ["cluster", "service", "general", "", "tls"]
-  peers = [] of Hash(String,String)
+  peers = [] of ::Raft::Config::Peer
   sections = conf.each do |key, val|
     next if defined_sections.includes?(key)
     peer = val

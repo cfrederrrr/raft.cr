@@ -1,3 +1,6 @@
+require "./binary"
+require "./packet"
+
 # Introduces a `Raft::Server` to another server (recognized locally
 # as a `Raft::Peer`) so that they can add eachother to their peers list
 #
@@ -11,7 +14,7 @@
 # No other transaction can occur between servers until the handshake
 # is successful. Luckily, it is rather simple to complete, as it is
 # nothing more than sharing `Raft::Version` and `Raft::Server#id`
-class Raft::RPC::Hello < Raft::Packet
+class Raft::Handshake::Hello < Raft::Packet
   #:nodoc:
   TNUM = 0x01_i16
 
@@ -50,7 +53,7 @@ class Raft::RPC::Hello < Raft::Packet
   end
 end
 
-class Raft::RPC::GoodBye < Raft::Packet
+class Raft::Handshake::GoodBye < Raft::Packet
   TNUM = -0x01_i16
   getter id : Int64
 

@@ -21,5 +21,28 @@ abstract class Raft::StateMachine
   # 1. The server receives instructions from a service client to update state
   # 1. The leader of the cluster sends consensus updates via
   #    `Raft::RPC::AppendEntries`
-  abstract def update(entry : Log::Entry)
+  abstract def update(entry : Update)
+end
+
+# `TNUM` must be defined and it must be `Int32`
+abstract class Raft::StateMachine::Update
+
+  abstract def iobody(io : IO, fm : IO::ByteFormat)
+  abstract def from_io(io : IO, fm : IO::ByteFormat)
+
+  macro inherited
+    @[AlwaysInline]
+    def tnum
+      {{@type}}::TNUM
+    end
+
+    def self.from_io(io : IO, fm : IO::ByteFormat)
+      from_io(io, fm)
+    end
+
+    def to_io(io : IO, fm : IO::ByteFormat)
+      {{@type}}::TNUM.to_io(io, fm)
+      iobody(io, fm)
+    end
+  end
 end
